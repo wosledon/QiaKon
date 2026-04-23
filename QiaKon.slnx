@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/QiaKon.Api/QiaKon.Api.csproj" />
+    <Project Path="src/QiaKon.Cache.Hybrid/QiaKon.Cache.Hybrid.csproj" />
     <Project Path="src/QiaKon.Cache.Memory/QiaKon.Cache.Memory.csproj" />
     <Project Path="src/QiaKon.Cache.Redis/QiaKon.Cache.Redis.csproj" />
     <Project Path="src/QiaKon.Cache/QiaKon.Cache.csproj" />

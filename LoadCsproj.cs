@@ -1,6 +1,5 @@
 using System;
 
-
 // 获取当前目录以及子目录所有的 .csproj 文件
 string[] csprojFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj", SearchOption.AllDirectories);
 foreach (string csprojFile in csprojFiles)

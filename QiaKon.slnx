@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QiaKon.Api/QiaKon.Api.csproj" />
+    <Project Path="src/QiaKon.Cache.Memory/QiaKon.Cache.Memory.csproj" />
+    <Project Path="src/QiaKon.Cache.Redis/QiaKon.Cache.Redis.csproj" />
+    <Project Path="src/QiaKon.Cache/QiaKon.Cache.csproj" />
+    <Project Path="src/QiaKon.Connector/QiaKon.Connector.csproj" />
+    <Project Path="src/QiaKon.EntityFrameworkCore.Npgsql/QiaKon.EntityFrameworkCore.Npgsql.csproj" />
+    <Project Path="src/QiaKon.EntityFrameworkCore/QiaKon.EntityFrameworkCore.csproj" />
+    <Project Path="src/QiaKon.Graph.Engine/QiaKon.Graph.Engine.csproj" />
+    <Project Path="src/QiaKon.Graph/QiaKon.Graph.csproj" />
+    <Project Path="src/QiaKon.Llm.Context/QiaKon.Llm.Context.csproj" />
+    <Project Path="src/QiaKon.Llm.Prompt/QiaKon.Llm.Prompt.csproj" />
+    <Project Path="src/QiaKon.Llm.Providers/QiaKon.Llm.Providers.csproj" />
+    <Project Path="src/QiaKon.Llm/QiaKon.Llm.csproj" />
+    <Project Path="src/QiaKon.Queue.Kafka/QiaKon.Queue.Kafka.csproj" />
+    <Project Path="src/QiaKon.Queue.Memory/QiaKon.Queue.Memory.csproj" />
+    <Project Path="src/QiaKon.Queue/QiaKon.Queue.csproj" />
+    <Project Path="src/QiaKon.Retrieval.Chunnking.MoE/QiaKon.Retrieval.Chunnking.MoE.csproj" />
+    <Project Path="src/QiaKon.Retrieval.Chunnking/QiaKon.Retrieval.Chunnking.csproj" />
+    <Project Path="src/QiaKon.Retrieval.Embedding/QiaKon.Retrieval.Embedding.csproj" />
+    <Project Path="src/QiaKon.Retrieval.VectorStore.Npgsql/QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
+    <Project Path="src/QiaKon.Retrieval.VectorStore/QiaKon.Retrieval.VectorStore.csproj" />
+    <Project Path="src/QiaKon.Retrieval/QiaKon.Retrieval.csproj" />
+    <Project Path="src/QiaKon.Shared/QiaKon.Shared.csproj" />
+    <Project Path="src/QiaKon.Workflow/QiaKon.Workflow.csproj" />
+  </Folder>
+</Solution>

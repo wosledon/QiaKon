@@ -1,6 +1,6 @@
-@QiaKon.Api_HostAddress = http://localhost:5160
+@host = http://localhost:5160
 
-GET {{QiaKon.Api_HostAddress}}/weatherforecast/
+GET {{host}}/weatherforecast/
 Accept: application/json
 
 ###

@@ -5,6 +5,8 @@
     <Project Path="src/QiaKon.Cache.Memory/QiaKon.Cache.Memory.csproj" />
     <Project Path="src/QiaKon.Cache.Redis/QiaKon.Cache.Redis.csproj" />
     <Project Path="src/QiaKon.Cache/QiaKon.Cache.csproj" />
+    <Project Path="src/QiaKon.Connector.Http/QiaKon.Connector.Http.csproj" />
+    <Project Path="src/QiaKon.Connector.Npgsql/QiaKon.Connector.Npgsql.csproj" />
     <Project Path="src/QiaKon.Connector/QiaKon.Connector.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore.Npgsql/QiaKon.EntityFrameworkCore.Npgsql.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore/QiaKon.EntityFrameworkCore.csproj" />

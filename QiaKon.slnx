@@ -8,6 +8,7 @@
     <Project Path="src/QiaKon.Connector.Http/QiaKon.Connector.Http.csproj" />
     <Project Path="src/QiaKon.Connector.Npgsql/QiaKon.Connector.Npgsql.csproj" />
     <Project Path="src/QiaKon.Connector/QiaKon.Connector.csproj" />
+    <Project Path="src/QiaKon.Contracts/QiaKon.Contracts.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore.Npgsql/QiaKon.EntityFrameworkCore.Npgsql.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore/QiaKon.EntityFrameworkCore.csproj" />
     <Project Path="src/QiaKon.Graph.Engine/QiaKon.Graph.Engine.csproj" />

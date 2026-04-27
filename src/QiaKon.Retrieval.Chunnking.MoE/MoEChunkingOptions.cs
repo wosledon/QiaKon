@@ -1,5 +1,3 @@
-using QiaKon.Llm;
-
 namespace QiaKon.Retrieval.Chunnking.MoE;
 
 /// <summary>
@@ -9,27 +7,10 @@ namespace QiaKon.Retrieval.Chunnking.MoE;
 /// 2. 支持全模态输入（图片、PDF 等），模型可直接理解原始格式
 /// 3. 可控制是否跳过文档预处理（当模型本身具备多模态能力时）
 ///
-/// 配置驱动设计：
-/// - 通过 <see cref="ProviderConfig"/> 传入完整的 LLM Provider 配置，MoE 会根据配置自动创建 Provider 实例
-/// - 如果未配置 ProviderConfig，则复用 DI 容器中已注册的默认 <see cref="ILLMProvider"/>
-/// - 模型名称通过 <see cref="ModelName"/> 指定，会覆盖 ProviderConfig 中的 DefaultModel
+/// LLM 客户端由调用方从数据库读取配置后创建，直接传入 MoE 使用
 /// </summary>
 public sealed class MoEChunkingOptions
 {
-    /// <summary>
-    /// LLM Provider 配置（可选）
-    /// 如果提供，MoE 会根据此配置独立创建一个 Provider 实例用于分块
-    /// 如果不提供，MoE 会复用 DI 容器中已注册的默认 ILLMProvider
-    /// </summary>
-    public LLMProviderConfig? ProviderConfig { get; set; }
-
-    /// <summary>
-    /// 分块时使用的模型名称（可选）
-    /// 如果指定，会覆盖 ProviderConfig 中的 DefaultModel
-    /// 如果未指定且 ProviderConfig 也未设置，则使用 Provider 的默认模型
-    /// </summary>
-    public string? ModelName { get; set; }
-
     /// <summary>
     /// 每个块的最大字符数（默认 2000）
     /// 模型会尽量在此限制内找到语义边界
@@ -49,16 +30,6 @@ public sealed class MoEChunkingOptions
     public bool SkipDocumentProcessing { get; set; } = false;
 
     /// <summary>
-    /// 分块温度参数（0-2，默认 0.1，低温度使分块更稳定）
-    /// </summary>
-    public double Temperature { get; set; } = 0.1;
-
-    /// <summary>
-    /// 最大输出 Token 数（默认 4096）
-    /// </summary>
-    public int MaxTokens { get; set; } = 4096;
-
-    /// <summary>
     /// 自定义分块提示词（可选，覆盖默认提示词）
     /// </summary>
     public string? CustomPrompt { get; set; }
@@ -72,15 +43,4 @@ public sealed class MoEChunkingOptions
     /// 并发处理的最大块数（默认 5）
     /// </summary>
     public int MaxConcurrency { get; set; } = 5;
-
-    /// <summary>
-    /// 解析最终使用的模型名称
-    /// 优先级：ModelName > ProviderConfig.DefaultModel > 兜底默认值
-    /// </summary>
-    internal string ResolveModelName()
-    {
-        return ModelName
-            ?? ProviderConfig?.DefaultModel
-            ?? "gpt-4o-mini";
-    }
 }

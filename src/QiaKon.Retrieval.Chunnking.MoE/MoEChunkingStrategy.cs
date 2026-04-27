@@ -1,9 +1,6 @@
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using QiaKon.Llm;
-using QiaKon.Llm.Providers;
 using QiaKon.Retrieval;
 
 namespace QiaKon.Retrieval.Chunnking.MoE;
@@ -15,58 +12,29 @@ namespace QiaKon.Retrieval.Chunnking.MoE;
 /// 1. 使用小体积大模型进行语义理解分块，而非简单的字符/段落切割
 /// 2. 模型根据文档语义结构（主题切换、逻辑边界）决定分块位置
 /// 3. 支持全模态输入——当 SkipDocumentProcessing=true 时，可直接接收原始文件
-/// 4. 配置驱动：通过 MoEChunkingOptions.ProviderConfig 传入 LLM 配置，无需在 DI 注册时写死模型
+/// 4. LLM 客户端由调用方从数据库读取配置后创建，直接传入 MoE 使用
 ///
 /// 与传统分块的区别：
 /// - 传统分块：基于字符/段落/句子等固定规则切割，可能切断语义
 /// - MoE 分块：基于 LLM 语义理解，在主题边界处切割，保留语义完整性
 /// </summary>
-public sealed class MoEChunkingStrategy : IChunkingStrategy, IDisposable
+public sealed class MoEChunkingStrategy : IMoEChunkingStrategy, IAsyncDisposable
 {
-    private readonly ILLMProvider _llmProvider;
-    private readonly bool _ownsProvider; // 标记是否由本策略创建并负责释放
+    private readonly ILlmClient _llmClient;
     private readonly MoEChunkingOptions _options;
     private readonly ILogger<MoEChunkingStrategy>? _logger;
 
     public string Name => "MoE";
 
     /// <summary>
-    /// DI 构造函数：根据配置决定 Provider 来源
-    /// - 如果 MoEChunkingOptions.ProviderConfig 不为 null，根据配置独立创建 Provider 实例
-    /// - 否则复用 DI 容器中已注册的默认 ILLMProvider
+    /// 构造函数：直接传入 ILlmClient 实例
+    /// LLM 客户端由调用方从数据库读取配置后创建，直接传入使用
     /// </summary>
-    public MoEChunkingStrategy(
-        IServiceProvider serviceProvider,
-        IOptions<MoEChunkingOptions> options,
-        ILogger<MoEChunkingStrategy>? logger = null)
+    public MoEChunkingStrategy(ILlmClient llmClient, MoEChunkingOptions options, ILogger<MoEChunkingStrategy>? logger = null)
     {
-        ArgumentNullException.ThrowIfNull(serviceProvider);
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger;
-
-        if (_options.ProviderConfig != null)
-        {
-            _llmProvider = LLMProviderFactory.CreateProvider(_options.ProviderConfig);
-            _ownsProvider = true;
-            _logger?.LogDebug("MoE 根据 ProviderConfig 独立创建 LLM Provider，模型: {Model}",
-                _options.ResolveModelName());
-        }
-        else
-        {
-            _llmProvider = serviceProvider.GetRequiredService<ILLMProvider>();
-            _ownsProvider = false;
-            _logger?.LogDebug("MoE 复用 DI 容器中注册的默认 ILLMProvider");
-        }
-    }
-
-    /// <summary>
-    /// 手动构造函数：直接传入 ILLMProvider 实例（适用于非 DI 场景或单元测试）
-    /// </summary>
-    public MoEChunkingStrategy(ILLMProvider llmProvider, MoEChunkingOptions options)
-    {
-        _llmProvider = llmProvider ?? throw new ArgumentNullException(nameof(llmProvider));
+        _llmClient = llmClient ?? throw new ArgumentNullException(nameof(llmClient));
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _ownsProvider = false;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<IChunk>> ChunkAsync(
@@ -101,17 +69,20 @@ public sealed class MoEChunkingStrategy : IChunkingStrategy, IDisposable
 
         var request = new ChatCompletionRequest
         {
-            Model = _options.ResolveModelName(),
+            Model = _llmClient.Model,
             Messages = new[]
             {
                 ChatMessage.System("你是一个智能文档分块专家。你的任务是将文档内容按照语义边界切分为多个块。每个块应该围绕一个主题或概念，保持语义完整性。"),
                 ChatMessage.User(prompt)
             },
-            Temperature = _options.Temperature,
-            MaxTokens = _options.MaxTokens
+            InferenceOptions = new LlmInferenceOptions
+            {
+                Temperature = 0.1,
+                MaxTokens = 4096
+            }
         };
 
-        var response = await _llmProvider.CompleteAsync(request, cancellationToken);
+        var response = await _llmClient.CompleteAsync(request, cancellationToken);
         var result = ParseChunkingResult(response.Message.GetTextContent() ?? string.Empty, documentId);
 
         _logger?.LogDebug("MoE 单次分块完成，生成 {Count} 个块", result.Count);
@@ -150,17 +121,20 @@ public sealed class MoEChunkingStrategy : IChunkingStrategy, IDisposable
 
             var request = new ChatCompletionRequest
             {
-                Model = _options.ResolveModelName(),
+                Model = _llmClient.Model,
                 Messages = new[]
                 {
                     ChatMessage.System("你是一个智能文档分块专家。你的任务是将文档内容按照语义边界切分为多个块。每个块应该围绕一个主题或概念，保持语义完整性。注意处理窗口边界，避免在句子中间截断。"),
                     ChatMessage.User(prompt)
                 },
-                Temperature = _options.Temperature,
-                MaxTokens = _options.MaxTokens
+                InferenceOptions = new LlmInferenceOptions
+                {
+                    Temperature = 0.1,
+                    MaxTokens = 4096
+                }
             };
 
-            var response = await _llmProvider.CompleteAsync(request, cancellationToken);
+            var response = await _llmClient.CompleteAsync(request, cancellationToken);
             var windowChunks = ParseChunkingResult(response.Message.GetTextContent(), documentId);
 
             // 调整偏移量
@@ -409,11 +383,9 @@ public sealed class MoEChunkingStrategy : IChunkingStrategy, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        if (_ownsProvider)
-        {
-            _llmProvider.Dispose();
-        }
+        // MoE 不负责释放 ILlmClient，因为客户端由调用方创建和拥有
+        await Task.CompletedTask;
     }
 }

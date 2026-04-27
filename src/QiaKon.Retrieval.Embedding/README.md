@@ -2,10 +2,6 @@
 
 文本嵌入（Embedding）抽象层，定义将文本转换为向量表示的通用接口。
 
-## 定位
-
-本模块是 RAG 系统的**向量化契约层**，不绑定任何具体的 Embedding Provider（如 OpenAI、Ollama、本地模型等）。
-
 ## 核心接口
 
 ```csharp
@@ -19,29 +15,32 @@ public interface IEmbeddingService
 }
 ```
 
-## 使用方式
+## 本地 ONNX 嵌入服务
 
-实现 `IEmbeddingService` 并注册到 DI：
+`LocalEmbeddingService` 基于 ONNX Runtime 加载本地模型进行推理：
 
 ```csharp
-// 示例：基于 OpenAI 的 Embedding 实现
-public class OpenAIEmbeddingService : IEmbeddingService
+// 注册（ModelPath 指向包含 onnx 模型和 tokenizer 文件的文件夹）
+services.AddLocalEmbedding(options =>
 {
-    public int Dimensions => 1536;
-    public string ModelName => "text-embedding-3-small";
+    options.Dimensions = 1024;  // Qwen3-Embedding 输出维度
+    options.ModelPath = @"C:\models\Qwen3-Embedding";  // 包含 model.onnx, vocab.json 等
+    options.ModelName = "Qwen3-Embedding";
+    options.MaxSequenceLength = 8192;
+});
 
-    public async Task<ReadOnlyMemory<float>> EmbedAsync(string text)
+// 使用
+public class MyService(IEmbeddingService embeddingService)
+{
+    public async Task EmbedText(string text)
     {
-        // 调用 OpenAI Embedding API
+        var vector = await embeddingService.EmbedAsync(text);
     }
 }
-
-// 注册
-services.AddSingleton<IEmbeddingService, OpenAIEmbeddingService>();
 ```
 
 ## 注意事项
 
 - `Dimensions` 必须与向量数据库集合创建时的维度一致
 - `EmbedBatchAsync` 通常比多次调用 `EmbedAsync` 效率更高
-- 建议对 Embedding 结果做本地缓存，避免重复计算
+- 本地嵌入适合离线或对成本敏感的场景

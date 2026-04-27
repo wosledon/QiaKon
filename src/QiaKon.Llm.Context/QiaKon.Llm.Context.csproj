@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\QiaKon.Llm\QiaKon.Llm.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="9.0.0" />
+  </ItemGroup>
+
 </Project>

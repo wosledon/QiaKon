@@ -11,9 +11,9 @@
     <Project Path="src/QiaKon.Contracts/QiaKon.Contracts.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore.Npgsql/QiaKon.EntityFrameworkCore.Npgsql.csproj" />
     <Project Path="src/QiaKon.EntityFrameworkCore/QiaKon.EntityFrameworkCore.csproj" />
+    <Project Path="src/QiaKon.Graph.Engine.Memory/QiaKon.Graph.Engine.Memory.csproj" />
     <Project Path="src/QiaKon.Graph.Engine.Npgsql/QiaKon.Graph.Engine.Npgsql.csproj" />
     <Project Path="src/QiaKon.Graph.Engine/QiaKon.Graph.Engine.csproj" />
-    <Project Path="src/QiaKon.Graph/QiaKon.Graph.csproj" />
     <Project Path="src/QiaKon.Llm.Context/QiaKon.Llm.Context.csproj" />
     <Project Path="src/QiaKon.Llm.Prompt/QiaKon.Llm.Prompt.csproj" />
     <Project Path="src/QiaKon.Llm.Providers/QiaKon.Llm.Providers.csproj" />
@@ -25,7 +25,8 @@
     <Project Path="src/QiaKon.Retrieval.Chunnking/QiaKon.Retrieval.Chunnking.csproj" />
     <Project Path="src/QiaKon.Retrieval.DocumentProcessor/QiaKon.Retrieval.DocumentProcessor.csproj" />
     <Project Path="src/QiaKon.Retrieval.Embedding/QiaKon.Retrieval.Embedding.csproj" />
-    <Project Path="src/QiaKon.Retrieval.VectorStore.Npgsql/QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
+    <Project
+      Path="src/QiaKon.Retrieval.VectorStore.Npgsql/QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
     <Project Path="src/QiaKon.Retrieval.VectorStore/QiaKon.Retrieval.VectorStore.csproj" />
     <Project Path="src/QiaKon.Retrieval/QiaKon.Retrieval.csproj" />
     <Project Path="src/QiaKon.Shared/QiaKon.Shared.csproj" />

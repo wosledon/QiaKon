@@ -1,4 +1,4 @@
-﻿namespace QiaKon.Graph.Engine;
+namespace QiaKon.Graph.Engine;
 
 /// <summary>
 /// 图节点表示

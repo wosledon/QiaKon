@@ -131,6 +131,18 @@ public interface IConnectorRegistry
 }
 
 /// <summary>
+/// 连接器管理器接口
+/// </summary>
+public interface IConnectorManager
+{
+    void Register(IConnector connector);
+    IConnector? Get(string name);
+    Task InitializeAllAsync(CancellationToken cancellationToken = default);
+    Task CloseAllAsync(CancellationToken cancellationToken = default);
+    Task<Dictionary<string, HealthCheckResult>> HealthCheckAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// 连接器类型
 /// </summary>
 public enum ConnectorType
@@ -147,11 +159,12 @@ public enum ConnectorType
 /// </summary>
 public enum ConnectorState
 {
-    NotInitialized,
-    Initializing,
-    Connected,
     Disconnected,
-    Error
+    Connecting,
+    Connected,
+    Healthy,
+    Unhealthy,
+    Closed
 }
 
 /// <summary>

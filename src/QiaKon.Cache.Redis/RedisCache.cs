@@ -12,11 +12,13 @@ public sealed class RedisCache : ICache
     private readonly IConnectionMultiplexer _connection;
     private readonly IDatabase _database;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly string _keyPrefix;
 
-    public RedisCache(IConnectionMultiplexer connection, int database = 0)
+    public RedisCache(IConnectionMultiplexer connection, int database = 0, string keyPrefix = "qiakon:")
     {
         _connection = connection;
         _database = connection.GetDatabase(database);
+        _keyPrefix = keyPrefix;
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
@@ -24,9 +26,12 @@ public sealed class RedisCache : ICache
         };
     }
 
+    private string PrefixKey(string key) => $"{_keyPrefix}{key}";
+
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
-        var value = await _database.StringGetAsync(key);
+        var prefixedKey = PrefixKey(key);
+        var value = await _database.StringGetAsync(prefixedKey);
         if (value.IsNullOrEmpty)
         {
             return default;
@@ -37,26 +42,29 @@ public sealed class RedisCache : ICache
 
     public async Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken cancellationToken = default)
     {
+        var prefixedKey = PrefixKey(key);
         var json = JsonSerializer.Serialize(value, _jsonOptions);
         var expiry = GetExpiry(options);
 
-        await _database.StringSetAsync(key, json, expiry);
+        await _database.StringSetAsync(prefixedKey, json, expiry);
     }
 
     public async Task<bool> RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
-        return await _database.KeyDeleteAsync(key);
+        var prefixedKey = PrefixKey(key);
+        return await _database.KeyDeleteAsync(prefixedKey);
     }
 
     public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
     {
-        return await _database.KeyExistsAsync(key);
+        var prefixedKey = PrefixKey(key);
+        return await _database.KeyExistsAsync(prefixedKey);
     }
 
     public async Task<Dictionary<string, T>> GetManyAsync<T>(IEnumerable<string> keys, CancellationToken cancellationToken = default)
     {
         var keyArray = keys.ToArray();
-        var redisKeys = keyArray.Select(k => (RedisKey)k).ToArray();
+        var redisKeys = keyArray.Select(k => (RedisKey)PrefixKey(k)).ToArray();
         var values = await _database.StringGetAsync(redisKeys);
 
         var result = new Dictionary<string, T>();
@@ -81,8 +89,9 @@ public sealed class RedisCache : ICache
 
         foreach (var (key, value) in items)
         {
+            var prefixedKey = PrefixKey(key);
             var json = JsonSerializer.Serialize(value, _jsonOptions);
-            await _database.StringSetAsync(key, json, expiry);
+            await _database.StringSetAsync(prefixedKey, json, expiry);
         }
     }
 
@@ -99,7 +108,7 @@ public sealed class RedisCache : ICache
                 continue;
             }
 
-            var keys = server.Keys(database: _database.Database).ToArray();
+            var keys = server.Keys(database: _database.Database, pattern: $"{_keyPrefix}*").ToArray();
             if (keys.Length > 0)
             {
                 _database.KeyDelete(keys);

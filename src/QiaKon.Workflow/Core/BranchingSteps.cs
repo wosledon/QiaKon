@@ -26,9 +26,18 @@ public class ParallelStep : StepBase
         var results = await Task.WhenAll(_steps.Select(s => s.ExecuteAsync(context, cancellationToken)));
 
         var failedCount = results.Count(r => r.Status == StepResultStatus.Failed);
+        var succeededCount = results.Count(r => r.Status == StepResultStatus.Succeeded);
+
+        var output = new Dictionary<string, object>
+        {
+            ["SucceededCount"] = succeededCount,
+            ["FailedCount"] = failedCount,
+            ["TotalCount"] = _steps.Count,
+            ["StepResults"] = results
+        };
 
         return failedCount == 0
-            ? StepResult.Succeeded()
+            ? StepResult.Succeeded(output)
             : StepResult.Failed($"{failedCount} of {_steps.Count} steps failed");
     }
 }

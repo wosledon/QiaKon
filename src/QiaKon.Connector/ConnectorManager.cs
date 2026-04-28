@@ -6,7 +6,7 @@ namespace QiaKon.Connector;
 /// <summary>
 /// 连接器管理器（配置驱动）
 /// </summary>
-public sealed class ConnectorManager : IDisposable, IAsyncDisposable
+public sealed class ConnectorManager : IConnectorManager, IDisposable, IAsyncDisposable
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IReadOnlyDictionary<string, IConnectorOptions> _options;
@@ -22,10 +22,28 @@ public sealed class ConnectorManager : IDisposable, IAsyncDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    /// <summary>
-    /// 初始化所有连接器
-    /// </summary>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public void Register(IConnector connector)
+    {
+        if (connector == null)
+            throw new ArgumentNullException(nameof(connector));
+
+        if (_connectors.ContainsKey(connector.Name))
+        {
+            throw new InvalidOperationException($"Connector '{connector.Name}' is already registered");
+        }
+
+        _connectors[connector.Name] = connector;
+    }
+
+    /// <inheritdoc />
+    public IConnector? Get(string name)
+    {
+        return _connectors.TryGetValue(name, out var connector) ? connector : null;
+    }
+
+    /// <inheritdoc />
+    public async Task InitializeAllAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
             return;
@@ -42,8 +60,43 @@ public sealed class ConnectorManager : IDisposable, IAsyncDisposable
         _initialized = true;
     }
 
+    /// <inheritdoc />
+    public async Task<Dictionary<string, HealthCheckResult>> HealthCheckAllAsync(CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<string, HealthCheckResult>();
+
+        foreach (var (name, connector) in _connectors)
+        {
+            try
+            {
+                results[name] = await connector.HealthCheckAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                results[name] = new HealthCheckResult(
+                    IsHealthy: false,
+                    Message: ex.Message,
+                    Latency: null);
+            }
+        }
+
+        return results;
+    }
+
+    /// <inheritdoc />
+    public async Task CloseAllAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var (_, connector) in _connectors)
+        {
+            await connector.CloseAsync(cancellationToken);
+        }
+
+        _connectors.Clear();
+        _initialized = false;
+    }
+
     /// <summary>
-    /// 获取指定名称的连接器
+    /// 获取指定名称的连接器（强类型）
     /// </summary>
     public T GetConnector<T>(string name) where T : IConnector
     {
@@ -77,32 +130,18 @@ public sealed class ConnectorManager : IDisposable, IAsyncDisposable
         return _connectors;
     }
 
-    /// <summary>
-    /// 关闭所有连接器
-    /// </summary>
-    public async Task CloseAsync(CancellationToken cancellationToken = default)
-    {
-        foreach (var (_, connector) in _connectors)
-        {
-            await connector.CloseAsync(cancellationToken);
-        }
-
-        _connectors.Clear();
-        _initialized = false;
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
             return;
 
-        await CloseAsync(CancellationToken.None);
+        await CloseAllAsync(CancellationToken.None);
         _disposed = true;
     }
 
     public void Dispose()
     {
-        CloseAsync(CancellationToken.None).GetAwaiter().GetResult();
+        CloseAllAsync(CancellationToken.None).GetAwaiter().GetResult();
         _disposed = true;
     }
 }

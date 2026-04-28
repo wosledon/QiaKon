@@ -21,20 +21,26 @@ public abstract class StepBase : IStep
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            return ExecuteCoreAsync(context, cancellationToken).ContinueWith(t =>
+            if (cancellationToken.IsCancellationRequested)
+            {
+                stopwatch.Stop();
+                return Task.FromResult(StepResult.Cancelled(stopwatch.Elapsed));
+            }
+
+            return ExecuteCoreAsync(context, cancellationToken).WaitAsync(cancellationToken).ContinueWith(t =>
             {
                 stopwatch.Stop();
                 context.CurrentStepName = Name;
 
                 if (t.IsFaulted && t.Exception != null)
                 {
-                    return StepResult.Failed(t.Exception.Message, t.Exception, stopwatch.Elapsed);
+                    return StepResult.Failed(t.Exception.Message, t.Exception.InnerException ?? t.Exception, stopwatch.Elapsed);
                 }
 
                 return t.IsCanceled
                     ? StepResult.Cancelled(stopwatch.Elapsed)
                     : t.Result;
-            }, cancellationToken);
+            }, TaskScheduler.Default);
         }
         catch (OperationCanceledException)
         {

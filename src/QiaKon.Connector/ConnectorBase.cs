@@ -7,7 +7,7 @@ namespace QiaKon.Connector;
 /// </summary>
 public abstract class ConnectorBase : IConnector
 {
-    private ConnectorState _state = ConnectorState.NotInitialized;
+    private ConnectorState _state = ConnectorState.Disconnected;
     private bool _disposed;
 
     protected ConnectorBase(string name, ConnectorType type)

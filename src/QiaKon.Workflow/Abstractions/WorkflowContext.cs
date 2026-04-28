@@ -26,6 +26,11 @@ public class WorkflowContext
     public string? CurrentStepName { get; set; }
 
     /// <summary>
+    /// 关联标识符，用于追踪整个流水线的执行
+    /// </summary>
+    public string CorrelationId { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>
     /// 执行标记，用于取消或中断
     /// </summary>
     public CancellationTokenSource? CancellationTokenSource { get; init; } = new();

@@ -42,7 +42,7 @@ public sealed class HttpConnector : ConnectorBase, IHttpConnector
     /// <inheritdoc />
     public override Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        State = ConnectorState.Initializing;
+        State = ConnectorState.Connecting;
 
         try
         {
@@ -69,7 +69,7 @@ public sealed class HttpConnector : ConnectorBase, IHttpConnector
         }
         catch (Exception ex)
         {
-            State = ConnectorState.Error;
+            State = ConnectorState.Unhealthy;
             throw new ConnectorException($"Failed to initialize HTTP connector '{Name}'", ex);
         }
     }

@@ -16,7 +16,7 @@ public sealed class ConnectorHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await _manager.InitializeAsync(stoppingToken);
+        await _manager.InitializeAllAsync(stoppingToken);
 
         // 等待宿主停止
         await Task.Delay(Timeout.Infinite, stoppingToken);
@@ -24,7 +24,7 @@ public sealed class ConnectorHostedService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _manager.CloseAsync(cancellationToken);
+        await _manager.CloseAllAsync(cancellationToken);
         await base.StopAsync(cancellationToken);
     }
 }

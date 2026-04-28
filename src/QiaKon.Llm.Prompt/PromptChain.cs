@@ -6,6 +6,44 @@ namespace QiaKon.Llm.Prompt;
 public sealed class PromptChain
 {
     private readonly List<PromptChainNode> _nodes = new();
+    private string? _systemPrompt;
+    private readonly List<ChatMessage> _messages = new();
+
+    /// <summary>
+    /// 添加系统提示词
+    /// </summary>
+    public PromptChain AddSystem(string systemPrompt)
+    {
+        _systemPrompt = systemPrompt;
+        return this;
+    }
+
+    /// <summary>
+    /// 添加用户消息
+    /// </summary>
+    public PromptChain AddUser(string userPrompt)
+    {
+        _messages.Add(ChatMessage.User(userPrompt));
+        return this;
+    }
+
+    /// <summary>
+    /// 添加助手消息
+    /// </summary>
+    public PromptChain AddAssistant(string assistantPrompt)
+    {
+        _messages.Add(ChatMessage.Assistant(assistantPrompt));
+        return this;
+    }
+
+    /// <summary>
+    /// 添加上下文内容
+    /// </summary>
+    public PromptChain AddContext(string context)
+    {
+        _messages.Add(ChatMessage.System(context));
+        return this;
+    }
 
     /// <summary>
     /// 添加Prompt节点
@@ -30,6 +68,23 @@ public sealed class PromptChain
     {
         _nodes.Add(new PromptChainNode(template, variables, outputVariable, condition));
         return this;
+    }
+
+    /// <summary>
+    /// 构建消息列表
+    /// </summary>
+    public IReadOnlyList<ChatMessage> Build()
+    {
+        var result = new List<ChatMessage>();
+
+        if (!string.IsNullOrEmpty(_systemPrompt))
+        {
+            result.Add(ChatMessage.System(_systemPrompt));
+        }
+
+        result.AddRange(_messages);
+
+        return result.AsReadOnly();
     }
 
     /// <summary>

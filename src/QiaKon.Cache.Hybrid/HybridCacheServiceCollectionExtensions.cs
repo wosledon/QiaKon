@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using QiaKon.Cache.Memory;
 using StackExchange.Redis;
+using QiaKon.Cache.Memory;
+using QiaKon.Cache.Redis;
 
 namespace QiaKon.Cache.Hybrid;
 
@@ -48,14 +48,16 @@ public static class HybridCacheServiceCollectionExtensions
 
         // 注册 L1 内存缓存
         services.AddMemoryCache();
-        services.AddSingleton<ICache, QiaKon.Cache.Memory.MemoryCache>();
+        services.AddSingleton<QiaKon.Cache.Memory.MemoryCache>();
+        services.AddSingleton<ICache>(sp => sp.GetRequiredService<QiaKon.Cache.Memory.MemoryCache>());
 
         // 注册 L2 Redis 缓存
-        services.AddSingleton<ICache>(sp =>
+        services.AddSingleton<QiaKon.Cache.Redis.RedisCache>(sp =>
         {
             var redis = sp.GetRequiredService<IConnectionMultiplexer>();
-            return new QiaKon.Cache.Redis.RedisCache(redis, registrationOptions.Database);
+            return new QiaKon.Cache.Redis.RedisCache(redis, registrationOptions.Database, registrationOptions.HybridCacheOptions.VersionPrefix.TrimEnd(':'));
         });
+        services.AddSingleton<ICache>(sp => sp.GetRequiredService<QiaKon.Cache.Redis.RedisCache>());
 
         // 注册多级缓存（覆盖 ICache）
         services.AddSingleton<ICache>(sp =>

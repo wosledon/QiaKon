@@ -867,32 +867,48 @@ public sealed class NpgsqlGraphEngine : IGraphEngine
         EnsureInitialized();
 
         // 使用递归 CTE 实现 Dijkstra 算法（带权最短路径）
+        // 添加了深度限制和节点去重以防止无限递归
         // 注意：对于大规模图，建议使用 pgRouting 扩展
         var edgeFilter = edgeLabel != null ? "AND e.label = @edge_label" : "";
 
+        const int maxDepth = 1000; // 安全限制
+
         var cteSql = $@"
             WITH RECURSIVE dijkstra AS (
-                SELECT n.id, 0.0 AS distance, ARRAY[n.id] AS path
+                -- Base case: start node with distance 0
+                SELECT n.id, 0.0 AS distance, ARRAY[n.id] AS path, 0 AS depth
                 FROM {NodeTable} n
                 WHERE n.id = @start_node_id
 
                 UNION ALL
 
-                SELECT n.id, d.distance + e.weight, d.path || n.id
+                -- Recursive case: explore neighbors
+                SELECT 
+                    n.id, 
+                    d.distance + e.weight AS distance, 
+                    d.path || n.id AS path,
+                    d.depth + 1 AS depth
                 FROM dijkstra d
                 JOIN {EdgeTable} e ON e.source_node_id = d.id
                 JOIN {NodeTable} n ON n.id = e.target_node_id
-                WHERE n.id <> ALL(d.path)
+                WHERE d.depth < @max_depth
+                  AND n.id <> ALL(d.path)
                   {edgeFilter}
+            ),
+            -- Get minimum distance for each node using window function
+            ranked AS (
+                SELECT id, distance, ROW_NUMBER() OVER (PARTITION BY id ORDER BY distance) as rn
+                FROM dijkstra
             )
-            SELECT id, MIN(distance) AS distance
-            FROM dijkstra
-            GROUP BY id
+            SELECT id, distance
+            FROM ranked
+            WHERE rn = 1
             ORDER BY distance";
 
         await using var connection = await _dataSource!.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand(cteSql, connection);
         command.Parameters.AddWithValue("start_node_id", startNodeId);
+        command.Parameters.AddWithValue("max_depth", maxDepth);
         if (edgeLabel != null)
         {
             command.Parameters.AddWithValue("edge_label", edgeLabel);

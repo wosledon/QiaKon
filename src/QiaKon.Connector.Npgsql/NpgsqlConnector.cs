@@ -42,7 +42,7 @@ public sealed class NpgsqlConnector : ConnectorBase, IDbConnector
     /// <inheritdoc />
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        State = ConnectorState.Initializing;
+        State = ConnectorState.Connecting;
 
         try
         {
@@ -63,7 +63,7 @@ public sealed class NpgsqlConnector : ConnectorBase, IDbConnector
         }
         catch (Exception ex)
         {
-            State = ConnectorState.Error;
+            State = ConnectorState.Unhealthy;
             throw new ConnectorException($"Failed to initialize Npgsql connector '{Name}'", ex);
         }
     }

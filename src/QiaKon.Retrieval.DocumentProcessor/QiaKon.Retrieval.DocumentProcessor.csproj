@@ -12,11 +12,10 @@
 
     <ItemGroup>
         <!-- ElBruno.MarkItDotNet: .NET原生文档转Markdown工具，支持流式处理和DI -->
-        <PackageReference Include="ElBruno.MarkItDotNet" Version="0.6.0" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"
-            Version="10.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+        <PackageReference Include="ElBruno.MarkItDotNet" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
     </ItemGroup>
 
 </Project>

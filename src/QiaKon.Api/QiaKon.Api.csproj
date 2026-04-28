@@ -13,4 +13,38 @@
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\QiaKon.Cache.Hybrid\QiaKon.Cache.Hybrid.csproj" />
+    <ProjectReference Include="..\QiaKon.Cache.Memory\QiaKon.Cache.Memory.csproj" />
+    <ProjectReference Include="..\QiaKon.Cache.Redis\QiaKon.Cache.Redis.csproj" />
+    <ProjectReference Include="..\QiaKon.Connector.Http\QiaKon.Connector.Http.csproj" />
+    <ProjectReference Include="..\QiaKon.Connector.Npgsql\QiaKon.Connector.Npgsql.csproj" />
+    <ProjectReference Include="..\QiaKon.Connector\QiaKon.Connector.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.EntityFrameworkCore.Npgsql\QiaKon.EntityFrameworkCore.Npgsql.csproj" />
+    <ProjectReference Include="..\QiaKon.EntityFrameworkCore\QiaKon.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\QiaKon.Graph.Engine.Memory\QiaKon.Graph.Engine.Memory.csproj" />
+    <ProjectReference Include="..\QiaKon.Graph.Engine.Npgsql\QiaKon.Graph.Engine.Npgsql.csproj" />
+    <ProjectReference Include="..\QiaKon.Graph.Engine\QiaKon.Graph.Engine.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm.Context\QiaKon.Llm.Context.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm.Prompt\QiaKon.Llm.Prompt.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm.Providers\QiaKon.Llm.Providers.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm.Tokenization\QiaKon.Llm.Tokenization.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm\QiaKon.Llm.csproj" />
+    <ProjectReference Include="..\QiaKon.Queue.Kafka\QiaKon.Queue.Kafka.csproj" />
+    <ProjectReference Include="..\QiaKon.Queue.Memory\QiaKon.Queue.Memory.csproj" />
+    <ProjectReference Include="..\QiaKon.Queue\QiaKon.Queue.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.Retrieval.Chunnking.MoE\QiaKon.Retrieval.Chunnking.MoE.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.Chunnking\QiaKon.Retrieval.Chunnking.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.Retrieval.DocumentProcessor\QiaKon.Retrieval.DocumentProcessor.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.Embedding\QiaKon.Retrieval.Embedding.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.Retrieval.VectorStore.Npgsql\QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.VectorStore\QiaKon.Retrieval.VectorStore.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval\QiaKon.Retrieval.csproj" />
+    <ProjectReference Include="..\QiaKon.Workflow\QiaKon.Workflow.csproj" />
+  </ItemGroup>
+
 </Project>

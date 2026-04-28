@@ -1,16 +1,46 @@
-function App() {
+import { useState, useEffect } from 'react'
+import { AuthProvider, useAuth } from '@/stores/authStore'
+import { Layout } from '@/components/Layout'
+import { LoginPage } from '@/pages/LoginPage'
+import { ChatPage } from '@/pages/ChatPage'
+import { DocumentsPage } from '@/pages/DocumentsPage'
+import { GraphPage } from '@/pages/GraphPage'
+
+type TabId = 'chat' | 'documents' | 'graph'
+
+function AppContent() {
+  const { isAuthenticated } = useAuth()
+  const [activeTab, setActiveTab] = useState<TabId>('chat')
+
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '') as TabId
+    if (['chat', 'documents', 'graph'].includes(hash)) {
+      setActiveTab(hash)
+    }
+  }, [])
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as TabId)
+    window.location.hash = tab
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          QiaKon KAG Platform
-        </h1>
-        <p className="text-lg text-gray-600">
-          企业级知识图谱问答平台
-        </p>
-      </div>
-    </div>
+    <Layout activeTab={activeTab} onTabChange={handleTabChange}>
+      {activeTab === 'chat' && <ChatPage />}
+      {activeTab === 'documents' && <DocumentsPage />}
+      {activeTab === 'graph' && <GraphPage />}
+    </Layout>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}

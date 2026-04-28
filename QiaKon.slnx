@@ -17,6 +17,7 @@
     <Project Path="src/QiaKon.Llm.Context/QiaKon.Llm.Context.csproj" />
     <Project Path="src/QiaKon.Llm.Prompt/QiaKon.Llm.Prompt.csproj" />
     <Project Path="src/QiaKon.Llm.Providers/QiaKon.Llm.Providers.csproj" />
+    <Project Path="src/QiaKon.Llm.Tokenization/QiaKon.Llm.Tokenization.csproj" />
     <Project Path="src/QiaKon.Llm/QiaKon.Llm.csproj" />
     <Project Path="src/QiaKon.Queue.Kafka/QiaKon.Queue.Kafka.csproj" />
     <Project Path="src/QiaKon.Queue.Memory/QiaKon.Queue.Memory.csproj" />
@@ -25,8 +26,7 @@
     <Project Path="src/QiaKon.Retrieval.Chunnking/QiaKon.Retrieval.Chunnking.csproj" />
     <Project Path="src/QiaKon.Retrieval.DocumentProcessor/QiaKon.Retrieval.DocumentProcessor.csproj" />
     <Project Path="src/QiaKon.Retrieval.Embedding/QiaKon.Retrieval.Embedding.csproj" />
-    <Project
-      Path="src/QiaKon.Retrieval.VectorStore.Npgsql/QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
+    <Project Path="src/QiaKon.Retrieval.VectorStore.Npgsql/QiaKon.Retrieval.VectorStore.Npgsql.csproj" />
     <Project Path="src/QiaKon.Retrieval.VectorStore/QiaKon.Retrieval.VectorStore.csproj" />
     <Project Path="src/QiaKon.Retrieval/QiaKon.Retrieval.csproj" />
     <Project Path="src/QiaKon.Shared/QiaKon.Shared.csproj" />

@@ -47,7 +47,7 @@ public class RetryStepWrapper : StepBase
 
             if (attempt < _maxRetries)
             {
-                var delay = _delayFactory(attempt);
+                var delay = _delayFactory!(attempt);
                 await Task.Delay(delay, cancellationToken);
             }
         }

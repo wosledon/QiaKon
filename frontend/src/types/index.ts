@@ -1,7 +1,18 @@
+export interface ApiResponse<T> {
+  success: boolean
+  message?: string
+  data: T
+  code?: string
+}
+
 export interface User {
   id: string
   username: string
   displayName?: string
+  email?: string
+  role?: string
+  departmentId?: string
+  departmentName?: string
 }
 
 export interface LoginCredentials {
@@ -9,48 +20,89 @@ export interface LoginCredentials {
   password: string
 }
 
-export interface AuthResponse {
+export interface AuthResponseData {
   token: string
+  expiresIn?: number
   user: User
 }
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-  sources?: Source[]
+export interface ChatRequest {
+  query: string
+  conversationId?: string
+  retrievalOptions?: Record<string, unknown>
+}
+
+export interface ChatResponseData {
+  response: string
+  sources: Source[]
+  conversationId: string
+  turns: number
 }
 
 export interface Source {
-  id: string
+  documentId: string
   title: string
+  text: string
   snippet: string
   score: number
 }
 
 export interface Document {
   id: string
-  name: string
-  size: number
+  title: string
   type: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  departmentId: string
+  departmentName: string
+  accessLevel: string
+  indexStatus: 'pending' | 'indexing' | 'completed' | 'failed'
+  version: number
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
+  size: number
+  metadata?: Record<string, unknown>
+}
+
+export interface PagedList<T> {
+  items: T[]
+  totalCount: number
+  page: number
+  pageSize: number
 }
 
 export interface GraphEntity {
   id: string
   name: string
   type: string
+  departmentId?: string
+  departmentName?: string
+  isPublic?: boolean
   properties: Record<string, unknown>
 }
 
 export interface GraphRelation {
   id: string
-  source: string
-  target: string
+  sourceId: string
+  sourceName: string
+  targetId: string
+  targetName: string
   type: string
+  properties?: Record<string, unknown>
+}
+
+export interface GraphQueryRequest {
+  startEntityId?: string
+  endEntityId?: string
+  relationType?: string
+  maxHops?: number
+}
+
+export interface GraphQueryResponseData {
+  paths: GraphPath[]
+}
+
+export interface GraphPath {
+  nodes: GraphEntity[]
+  edges: GraphRelation[]
 }
 
 export interface ApiError {

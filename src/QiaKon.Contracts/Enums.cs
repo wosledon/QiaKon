@@ -1,29 +1,29 @@
 namespace QiaKon.Contracts;
 
 /// <summary>
-/// 访问级别枚举
+/// 访问级别枚举 - 与文档保持一致
 /// </summary>
 public enum AccessLevel
 {
     /// <summary>
-    /// 公开
+    /// 公开 - 所有人都可访问
     /// </summary>
     Public = 0,
 
     /// <summary>
-    /// 内部
+    /// 部门级 - 仅本部门成员可访问
     /// </summary>
-    Internal = 1,
+    Department = 1,
 
     /// <summary>
-    /// 机密
+    /// 受限 - 需要特定权限
     /// </summary>
-    Confidential = 2,
+    Restricted = 2,
 
     /// <summary>
-    /// 绝密
+    /// 机密 - 仅核心人员可访问
     /// </summary>
-    Secret = 3
+    Confidential = 3
 }
 
 /// <summary>

@@ -61,5 +61,9 @@
         <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
         <!-- 项目引用（实际上不需要，但 CPM 要求） -->
         <PackageVersion Include="QiaKon.Contracts" Version="1.0.0" />
+
+        <!-- JWT -->
+        <PackageVersion Include="Microsoft.IdentityModel.Tokens" Version="8.2.1" />
+        <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
     </ItemGroup>
 </Project>

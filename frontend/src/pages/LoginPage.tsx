@@ -23,7 +23,7 @@ export function LoginPage() {
     setIsLoading(true)
     try {
       const response = await authApi.login({ username, password })
-      login(response.token, response.user)
+      login(response)
     } catch (err) {
       const message = err instanceof Error ? err.message : '登录失败，请重试'
       setError(message)
@@ -71,6 +71,23 @@ export function LoginPage() {
               登录
             </Button>
           </form>
+
+          <div className="mt-6 rounded-lg bg-gray-50 border border-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-500 mb-1 font-medium">演示账号</p>
+            <div className="flex items-center justify-between text-sm text-gray-700">
+              <span>admin / password123</span>
+              <button
+                type="button"
+                className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                onClick={() => {
+                  setUsername('admin')
+                  setPassword('password123')
+                }}
+              >
+                一键填充
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using QiaKon.Api.Middleware;
@@ -23,6 +25,7 @@ using QiaKon.Retrieval.Chunnking;
 using QiaKon.Retrieval.DocumentProcessor;
 using QiaKon.Retrieval.Embedding;
 using QiaKon.Retrieval.VectorStore.Npgsql;
+using QiaKon.Shared;
 using QiaKon.Workflow;
 using QiaKon.Workflow.Extensions;
 
@@ -34,79 +37,69 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(8080);
 });
 
-// Add services
-builder.Services.AddControllers();
+// ============ JSON Serialization ============
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+    });
+
 builder.Services.AddOpenApi();
 
 // Configuration
-var connectionString = builder.Configuration.GetConnectionString("Default")!;
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis")!;
+var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Host=localhost;Database=qiakon;Username=postgres;Password=postgres";
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
 var isDevelopment = builder.Environment.IsDevelopment();
+
+// ============ Shared Services (Memory-based) ============
+builder.Services.AddSharedServices();
 
 // ============ Cache Services ============
 if (isDevelopment)
 {
-    // 开发环境使用内存缓存
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ICache, MemoryCache>();
 }
 else
 {
-    // 生产环境使用混合缓存
     builder.Services.AddHybridCache(redisConnectionString);
 }
 
 // ============ Connector Services ============
-// Http Connector
 builder.Services.AddHttpConnectorSupport();
-// Npgsql Connector
 builder.Services.AddNpgsqlConnectorSupport();
 
 // ============ LLM Services ============
-// Tokenizer
 builder.Services.AddLlmTokenizer("default");
-
-// Context
 builder.Services.AddConversationContext(maxMessages: 50, maxTokens: 8000);
-
-// Prompt
 builder.Services.AddSingleton<PromptTemplate>();
-
-// LLM Client Factory
 builder.Services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
 
 // ============ Workflow Services ============
 builder.Services.AddWorkflowCore();
 
 // ============ Retrieval Services ============
-// Chunking (开发环境使用简单字符分块)
 builder.Services.AddCharacterChunking();
-
-// Embedding
 builder.Services.AddLocalEmbedding(options =>
 {
     options.ModelPath = "./models/embedding";
     options.Dimensions = 384;
 });
-
-// VectorStore
 builder.Services.AddNpgsqlVectorStore(options =>
 {
     options.ConnectionString = connectionString;
 });
-
-// DocumentProcessor
 builder.Services.AddMarkItDownDocumentProcessor();
 
 // ============ Graph Engine Services ============
 if (isDevelopment)
 {
-    // 开发环境使用内存图引擎
     builder.Services.AddMemoryGraphEngine();
 }
 else
 {
-    // 生产环境使用 Npgsql 图引擎
     builder.Services.AddNpgsqlGraphEngine(options =>
     {
         options.ConnectionString = connectionString;
@@ -116,12 +109,10 @@ else
 // ============ Queue Services ============
 if (isDevelopment)
 {
-    // 开发环境使用内存队列
     builder.Services.AddSingleton<IQueue, MemoryQueue>();
 }
 else
 {
-    // 生产环境使用 Kafka
     builder.Services.AddKafkaQueue(options =>
     {
         options.BootstrapServers = "127.0.0.1:9092";
@@ -133,7 +124,7 @@ builder.Services.AddQiaKonNpgsqlDbContext<QiaKonNpgsqlDbContext>(connectionStrin
 
 // ============ JWT Authentication ============
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
+var secretKey = jwtSection["SecretKey"] ?? "QiaKon-Dev-Secret-Key-For-Development-Only-Min-32-Chars!";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -144,8 +135,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
+            ValidIssuer = jwtSection["Issuer"] ?? "QiaKon",
+            ValidAudience = jwtSection["Audience"] ?? "QiaKon.Api",
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
         };
     });
@@ -165,8 +156,8 @@ builder.Services.AddCors(options =>
 
 // ============ Health Checks ============
 builder.Services.AddHealthChecks()
-    .AddNpgSql(connectionString, name: "postgresql")
-    .AddRedis(redisConnectionString, name: "redis");
+    .AddNpgSql(connectionString, name: "postgresql", tags: new[] { "db" })
+    .AddRedis(redisConnectionString, name: "redis", tags: new[] { "cache" });
 
 var app = builder.Build();
 
@@ -184,7 +175,6 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health check endpoint
 app.MapHealthChecks("/health");
 
 app.MapControllers();

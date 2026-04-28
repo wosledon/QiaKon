@@ -1,8 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
+using QiaKon.Contracts.DTOs;
+using QiaKon.Shared;
 
 namespace QiaKon.Api.Controllers;
 
@@ -10,67 +8,76 @@ namespace QiaKon.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly IAuthService _authService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IConfiguration configuration)
+    public AuthController(IAuthService authService, ILogger<AuthController> logger)
     {
-        _configuration = configuration;
+        _authService = authService;
+        _logger = logger;
     }
 
+    /// <summary>
+    /// 用户登录
+    /// </summary>
     [HttpPost("login")]
-    public ApiResponse<object> Login([FromBody] LoginRequest request)
+    public ApiResponse<LoginResponseDto> Login([FromBody] LoginRequestDto request)
     {
-        // 临时模拟验证
-        if (request.Username != "admin" || request.Password != "admin123")
+        var result = _authService.Login(request);
+
+        if (result == null)
         {
-            return ApiResponse<object>.Fail("Invalid username or password", 401);
+            _logger.LogWarning("Login failed for user: {Username}", request.Username);
+            return ApiResponse<LoginResponseDto>.Fail("用户名或密码错误", 401);
         }
 
-        var token = GenerateJwtToken(request.Username);
-        return ApiResponse<object>.Ok(new { token, expiresIn = 3600 }, "Login successful");
+        _logger.LogInformation("User logged in: {Username}", request.Username);
+        return ApiResponse<LoginResponseDto>.Ok(result, "登录成功");
     }
 
+    /// <summary>
+    /// 刷新Token
+    /// </summary>
     [HttpPost("refresh")]
-    public ApiResponse<object> Refresh([FromBody] RefreshTokenRequest request)
+    public ApiResponse<LoginResponseDto> Refresh([FromBody] RefreshTokenRequestDto request)
     {
-        // 临时模拟，实际应验证 refresh token
+        // 简化的刷新逻辑 - 实际应该验证refresh token
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
-            return ApiResponse<object>.Fail("Refresh token is required", 400);
+            return ApiResponse<LoginResponseDto>.Fail("Refresh token is required", 400);
         }
 
-        var token = GenerateJwtToken("user");
-        return ApiResponse<object>.Ok(new { token, expiresIn = 3600 }, "Token refreshed");
+        return ApiResponse<LoginResponseDto>.Fail("Refresh token not supported in this version", 501);
     }
 
-    private string GenerateJwtToken(string username)
+    /// <summary>
+    /// 获取当前用户信息
+    /// </summary>
+    [HttpGet("me")]
+    public ApiResponse<UserDto> GetCurrentUser()
     {
-        var jwtSection = _configuration.GetSection("Jwt");
-        var secretKey = jwtSection["SecretKey"]!;
-        var issuer = jwtSection["Issuer"]!;
-        var audience = jwtSection["Audience"]!;
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
+        var userId = GetCurrentUserId();
+        if (userId == null)
         {
-            new Claim(ClaimTypes.Name, username),
-            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
+            return ApiResponse<UserDto>.Fail("User not authenticated", 401);
+        }
 
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
-            signingCredentials: credentials
-        );
+        var user = _authService.GetUserById(userId.Value);
+        if (user == null)
+        {
+            return ApiResponse<UserDto>.Fail("User not found", 404);
+        }
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return ApiResponse<UserDto>.Ok(user);
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (Guid.TryParse(userIdClaim, out var userId))
+        {
+            return userId;
+        }
+        return null;
     }
 }
-
-public record LoginRequest(string Username, string Password);
-public record RefreshTokenRequest(string RefreshToken);

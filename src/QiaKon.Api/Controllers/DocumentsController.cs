@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using QiaKon.Contracts;
+using QiaKon.Contracts.DTOs;
+using QiaKon.Shared;
 
 namespace QiaKon.Api.Controllers;
 
@@ -6,75 +9,107 @@ namespace QiaKon.Api.Controllers;
 [Route("api/[controller]")]
 public class DocumentsController : ControllerBase
 {
-    private static readonly List<Document> _documents = new()
-    {
-        new Document { Id = Guid.NewGuid(), Title = "Sample Document 1", Content = "Content of document 1", CreatedAt = DateTime.UtcNow },
-        new Document { Id = Guid.NewGuid(), Title = "Sample Document 2", Content = "Content of document 2", CreatedAt = DateTime.UtcNow }
-    };
+    private readonly IDocumentService _documentService;
+    private readonly ILogger<DocumentsController> _logger;
 
+    public DocumentsController(IDocumentService documentService, ILogger<DocumentsController> logger)
+    {
+        _documentService = documentService;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// 获取文档列表
+    /// </summary>
     [HttpGet]
-    public ApiResponse<IEnumerable<Document>> GetAll()
+    public ApiResponse<DocumentPagedResultDto> GetDocuments(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] IndexStatus? status = null)
     {
-        return ApiResponse<IEnumerable<Document>>.Ok(_documents);
+        var result = _documentService.GetDocuments(page, pageSize, departmentId, status);
+        return ApiResponse<DocumentPagedResultDto>.Ok(result);
     }
 
+    /// <summary>
+    /// 获取文档详情
+    /// </summary>
     [HttpGet("{id:guid}")]
-    public ApiResponse<Document> GetById(Guid id)
+    public ApiResponse<DocumentDetailDto> GetById(Guid id)
     {
-        var doc = _documents.FirstOrDefault(d => d.Id == id);
+        var doc = _documentService.GetDocument(id);
         return doc is null
-            ? ApiResponse<Document>.Fail("Document not found", 404)
-            : ApiResponse<Document>.Ok(doc);
+            ? ApiResponse<DocumentDetailDto>.Fail("文档不存在", 404)
+            : ApiResponse<DocumentDetailDto>.Ok(doc);
     }
 
+    /// <summary>
+    /// 创建文档
+    /// </summary>
     [HttpPost]
-    public ApiResponse<Document> Create([FromBody] CreateDocumentRequest request)
+    public async Task<ApiResponse<DocumentDetailDto>> Create([FromForm] IFormFile file, [FromForm] UploadDocumentFormDto form, CancellationToken cancellationToken)
     {
-        var doc = new Document
+        if (file is null || file.Length == 0)
         {
-            Id = Guid.NewGuid(),
-            Title = request.Title,
-            Content = request.Content,
-            CreatedAt = DateTime.UtcNow
-        };
-        _documents.Add(doc);
-        return ApiResponse<Document>.Ok(doc, "Document created");
+            return ApiResponse<DocumentDetailDto>.Fail("请上传有效文件", 400);
+        }
+
+        var userId = GetCurrentUserId();
+        var doc = await _documentService.UploadDocumentAsync(file, form, userId, cancellationToken);
+        _logger.LogInformation("Document created: {Id} by user {UserId}", doc.Id, userId);
+        return ApiResponse<DocumentDetailDto>.Ok(doc, "文档上传成功");
     }
 
+    /// <summary>
+    /// 更新文档
+    /// </summary>
     [HttpPut("{id:guid}")]
-    public ApiResponse<Document> Update(Guid id, [FromBody] UpdateDocumentRequest request)
+    public ApiResponse<DocumentDetailDto> Update(Guid id, [FromBody] UpdateDocumentRequestDto request)
     {
-        var doc = _documents.FirstOrDefault(d => d.Id == id);
+        var userId = GetCurrentUserId();
+        var doc = _documentService.UpdateDocument(id, request, userId);
+
         if (doc is null)
-            return ApiResponse<Document>.Fail("Document not found", 404);
+            return ApiResponse<DocumentDetailDto>.Fail("文档不存在", 404);
 
-        doc.Title = request.Title ?? doc.Title;
-        doc.Content = request.Content ?? doc.Content;
-        doc.UpdatedAt = DateTime.UtcNow;
-
-        return ApiResponse<Document>.Ok(doc, "Document updated");
+        _logger.LogInformation("Document updated: {Id} by user {UserId}", id, userId);
+        return ApiResponse<DocumentDetailDto>.Ok(doc, "文档更新成功");
     }
 
+    /// <summary>
+    /// 删除文档
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public ApiResponse Delete(Guid id)
     {
-        var doc = _documents.FirstOrDefault(d => d.Id == id);
-        if (doc is null)
-            return ApiResponse.Fail("Document not found", 404);
+        var result = _documentService.DeleteDocument(id);
 
-        _documents.Remove(doc);
-        return ApiResponse.Ok("Document deleted");
+        if (!result)
+            return ApiResponse.Fail("文档不存在", 404);
+
+        _logger.LogInformation("Document deleted: {Id}", id);
+        return ApiResponse.Ok("文档删除成功");
+    }
+
+    /// <summary>
+    /// 重建文档索引
+    /// </summary>
+    [HttpPost("reindex")]
+    public ApiResponse<ReindexResponseDto> Reindex([FromBody] ReindexRequestDto? request)
+    {
+        var result = _documentService.Reindex(request?.DocumentId);
+        _logger.LogInformation("Reindex completed: {Message}", result.Message);
+        return ApiResponse<ReindexResponseDto>.Ok(result);
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (Guid.TryParse(userIdClaim, out var userId))
+        {
+            return userId;
+        }
+        return Guid.Empty;
     }
 }
-
-public class Document
-{
-    public Guid Id { get; set; }
-    public string? Title { get; set; }
-    public string? Content { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime? UpdatedAt { get; set; }
-}
-
-public record CreateDocumentRequest(string Title, string Content);
-public record UpdateDocumentRequest(string? Title, string? Content);

@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 import { documentApi } from '@/services/api'
 import type { Document } from '@/types'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: '待处理', color: 'bg-yellow-100 text-yellow-700' },
-  processing: { label: '处理中', color: 'bg-blue-100 text-blue-700' },
+  indexing: { label: '索引中', color: 'bg-blue-100 text-blue-700' },
   completed: { label: '已完成', color: 'bg-green-100 text-green-700' },
   failed: { label: '失败', color: 'bg-red-100 text-red-700' },
 }
@@ -25,22 +26,28 @@ function formatDate(iso: string): string {
 
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(20)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [metaTitle, setMetaTitle] = useState('')
+  const [metaDesc, setMetaDesc] = useState('')
 
   const loadDocuments = useCallback(async () => {
     setIsLoading(true)
     setError('')
     try {
-      const data = await documentApi.list()
-      setDocuments(data)
+      const data = await documentApi.list(page, pageSize)
+      setDocuments(data.items)
+      setTotalCount(data.totalCount)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [page, pageSize])
 
   useEffect(() => {
     loadDocuments()
@@ -50,10 +57,16 @@ export function DocumentsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const metadata: Record<string, string> = {}
+    if (metaTitle.trim()) metadata.title = metaTitle.trim()
+    if (metaDesc.trim()) metadata.description = metaDesc.trim()
+
     setUploading(true)
     setError('')
     try {
-      await documentApi.upload(file)
+      await documentApi.upload(file, metadata)
+      setMetaTitle('')
+      setMetaDesc('')
       await loadDocuments()
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败')
@@ -68,16 +81,19 @@ export function DocumentsPage() {
     try {
       await documentApi.delete(id)
       setDocuments((prev) => prev.filter((d) => d.id !== id))
+      setTotalCount((c) => c - 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败')
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">文档管理</h1>
-        <div>
+        <div className="flex items-center gap-3">
           <input
             type="file"
             id="file-upload"
@@ -102,6 +118,22 @@ export function DocumentsPage() {
         </div>
       </div>
 
+      {/* Metadata inputs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <Input
+          placeholder="文件标题（可选）"
+          value={metaTitle}
+          onChange={(e) => setMetaTitle(e.target.value)}
+          disabled={uploading}
+        />
+        <Input
+          placeholder="描述（可选）"
+          value={metaDesc}
+          onChange={(e) => setMetaDesc(e.target.value)}
+          disabled={uploading}
+        />
+      </div>
+
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
       )}
@@ -123,43 +155,87 @@ export function DocumentsPage() {
           <p className="text-sm mt-1">点击上方按钮上传文档</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {documents.map((doc) => {
-            const status = statusMap[doc.status] || { label: doc.status, color: 'bg-gray-100 text-gray-600' }
-            return (
-              <Card key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4">
-                <div className="flex items-start gap-4 min-w-0">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+        <>
+          <div className="grid gap-4">
+            {documents.map((doc) => {
+              const status = statusMap[doc.indexStatus] || { label: doc.indexStatus, color: 'bg-gray-100 text-gray-600' }
+              return (
+                <Card key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4">
+                  <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{doc.title}</p>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {doc.departmentName} · v{doc.version} · {formatSize(doc.size)} · {formatDate(doc.createdAt)}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {doc.type}
+                        </span>
+                        <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {doc.accessLevel}
+                        </span>
+                      </div>
+                      {doc.metadata && Object.keys(doc.metadata).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(doc.metadata).slice(0, 3).map(([k, v]) => (
+                            <span key={k} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                              {k}: {String(v)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{doc.name}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {formatSize(doc.size)} · {formatDate(doc.createdAt)}
-                    </p>
+                  <div className="flex items-center gap-3 mt-3 sm:mt-0 flex-shrink-0">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                      {status.label}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(doc.id)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </Button>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 mt-3 sm:mt-0 flex-shrink-0">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
-                    {status.label}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(doc.id)}
-                    className="text-gray-400 hover:text-red-600"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </Button>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <span className="text-sm text-gray-500">
+              共 {totalCount} 条，第 {page} / {totalPages} 页
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || isLoading}
+              >
+                上一页
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || isLoading}
+              >
+                下一页
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

@@ -37,7 +37,7 @@ public class RetryStepWrapper : StepBase
 
                 if (result.Status == StepResultStatus.Failed)
                 {
-                    lastException = result.Exception!;
+                    lastException = result.Exception ?? new InvalidOperationException("Step failed");
                 }
             }
             catch (Exception ex) when (attempt < _maxRetries)
@@ -54,7 +54,7 @@ public class RetryStepWrapper : StepBase
 
         return StepResult.Failed(
             $"Step failed after {_maxRetries + 1} attempts",
-            lastException!);
+            lastException ?? new InvalidOperationException("Step failed after retries"));
     }
 }
 

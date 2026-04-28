@@ -12,7 +12,6 @@ public sealed class MemoryGraphEngine : IGraphEngine
     private readonly ConcurrentDictionary<string, GraphEdge> _edges = new();
     private readonly ConcurrentDictionary<string, List<string>> _nodeOutEdges = new();
     private readonly ConcurrentDictionary<string, List<string>> _nodeInEdges = new();
-    private bool _disposed;
 
     private static List<string> GetOrDefault(ConcurrentDictionary<string, List<string>> dict, string key)
     {
@@ -446,7 +445,6 @@ public sealed class MemoryGraphEngine : IGraphEngine
 
     public ValueTask DisposeAsync()
     {
-        _disposed = true;
         _nodes.Clear();
         _edges.Clear();
         _nodeOutEdges.Clear();

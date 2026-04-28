@@ -213,7 +213,6 @@ internal sealed class QwenTokenizer
     private readonly int _unkTokenId = 151643;
     private readonly int _clsTokenId = 151643;
     private readonly int _sepTokenId = 151644;
-    private readonly int _padTokenId = 151645;
 
     public QwenTokenizer(Dictionary<string, int> vocab)
     {

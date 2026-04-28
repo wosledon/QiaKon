@@ -1,0 +1,48 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- ASP.NET Core -->
+        <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+        <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Http" Version="9.0.0" />
+
+        <!-- EF Core -->
+        <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
+        <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite"
+            Version="9.0.0" />
+
+        <!-- 连接器 -->
+        <PackageVersion Include="Npgsql" Version="9.0.0" />
+        <PackageVersion Include="StackExchange.Redis" Version="2.8.0" />
+
+        <!-- LLM -->
+        <PackageVersion Include="OpenAI" Version="2.0.0" />
+        <PackageVersion Include="Anthropic.SDK" Version="3.0.0" />
+
+        <!-- 向量 -->
+        <PackageVersion Include="Pgvector" Version="0.2.0" />
+        <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.2.0" />
+
+        <!-- 消息队列 -->
+        <PackageVersion Include="Confluent.Kafka" Version="2.5.0" />
+
+        <!-- 测试 -->
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
+        <PackageVersion Include="xunit" Version="2.9.0" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+        <PackageVersion Include="Moq" Version="4.20.70" />
+        <PackageVersion Include="FluentAssertions" Version="6.12.0" />
+        <PackageVersion Include="Testcontainers" Version="3.10.0" />
+        <PackageVersion Include="Testcontainers.PostgreSql" Version="3.10.0" />
+        <PackageVersion Include="Testcontainers.Kafka" Version="3.10.0" />
+
+        <!-- 工具 -->
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+            Version="9.0.0" />
+    </ItemGroup>
+</Project>

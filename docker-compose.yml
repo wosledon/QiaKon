@@ -1,0 +1,66 @@
+# ==============================================================================
+# Docker Compose 配置（仅供参考）
+# 当前项目直接使用本地环境，不使用 Docker
+# 如需启用 Docker，请参考此配置启动基础设施
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库（带 pgvector 扩展）
+  # 本地环境: 127.0.0.1:5243 admin/admin@123
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: qiakon-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin@123
+      POSTGRES_DB: postgres
+    ports:
+      - "5243:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles:
+      - infrastructure
+
+  # Redis 缓存
+  # 本地环境: 127.0.0.1:6379 admin@123
+  redis:
+    image: redis:7-alpine
+    container_name: qiakon-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass admin@123
+    profiles:
+      - infrastructure
+
+  # Kafka 消息队列
+  # 本地环境: 127.0.0.1:9092
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: qiakon-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    profiles:
+      - infrastructure
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: qiakon-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    profiles:
+      - infrastructure
+
+volumes:
+  postgres_data:

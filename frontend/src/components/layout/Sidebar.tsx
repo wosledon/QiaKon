@@ -105,8 +105,9 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
 ]
 
-function isActive(locationPath: string, href: string): boolean {
+function isActive(locationPath: string, href: string, isChild = false): boolean {
   if (href === '/') return locationPath === '/'
+  if (isChild) return locationPath === href
   return locationPath === href || locationPath.startsWith(`${href}/`)
 }
 
@@ -160,10 +161,10 @@ function NavItemComponent({ item, locationPath }: { item: NavItem; locationPath:
       <button
         onClick={() => setOpen(!open)}
         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-          isChildActive ? 'text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          isItemActive ? 'text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`}
       >
-        <item.icon className={`w-4.5 h-4.5 flex-shrink-0 ${isChildActive ? 'text-blue-600' : 'text-gray-400'}`} />
+        <item.icon className={`w-4.5 h-4.5 flex-shrink-0 ${isItemActive ? 'text-blue-600' : 'text-gray-400'}`} />
         <span className="flex-1 text-left truncate">{item.label}</span>
         <ChevronRight
           className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${showExpanded ? 'rotate-90' : ''}`}
@@ -172,7 +173,7 @@ function NavItemComponent({ item, locationPath }: { item: NavItem; locationPath:
       {showExpanded && item.children && (
         <ul className="mt-0.5 ml-2 pl-4 border-l border-gray-200 space-y-0.5">
           {item.children.map((child) => {
-            const childActive = isActive(locationPath, child.href)
+            const childActive = isActive(locationPath, child.href, true)
             return (
               <li key={child.href}>
                 <Link

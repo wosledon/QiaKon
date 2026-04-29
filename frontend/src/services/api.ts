@@ -164,6 +164,39 @@ export const chatApi = {
     apiPost<ChatResponseData>('/retrieval/chat', request),
 }
 
+// History API
+export interface ConversationHistoryDto {
+  id: string
+  title: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConversationDetailDto {
+  id: string
+  title: string
+  messages: { id: string; role: string; content: string; createdAt: string; sources?: unknown[] }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PagedResultDto<T> {
+  items: T[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export const ragApi = {
+  getHistory: (page = 1, pageSize = 50) =>
+    apiGet<PagedResultDto<ConversationHistoryDto>>(`/retrieval/history?page=${page}&pageSize=${pageSize}`),
+  getDetail: (id: string) => apiGet<ConversationDetailDto>(`/retrieval/history/${id}`),
+  deleteHistory: (id: string) => apiDelete<void>(`/retrieval/history/${id}`),
+  updateTitle: (id: string, title: string) => apiPut<ConversationDetailDto>(`/retrieval/history/${id}/title`, { title }),
+  exportMarkdown: (id: string) => apiGet<Blob>(`/retrieval/history/${id}/export`),
+}
+
 // Document API
 export const documentApi = {
   list: (params?: DocumentListParams) => {
@@ -385,4 +418,45 @@ export const profileApi = {
   update: (data: ProfileUpdateData) => apiPut<User>('/profile', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => apiPut<void>('/profile/password', data),
   logout: () => apiPost<void>('/profile/logout', {}),
+}
+
+// Workflow API
+export interface WorkflowDefinition {
+  id: string
+  name: string
+  description: string
+  stageCount: number
+  createdAt: string
+}
+
+export interface WorkflowExecution {
+  id: string
+  pipelineName: string
+  status: string
+  startedAt: string
+  completedAt: string | null
+  duration: number | null
+  error: string | null
+}
+
+export interface PagedExecutionResult {
+  items: WorkflowExecution[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export const workflowApi = {
+  list: () => apiGet<WorkflowDefinition[]>('/workflow'),
+  create: (data: { name: string; description?: string }) => apiPost<WorkflowDefinition>('/workflow', data),
+  delete: (id: string) => apiDelete<void>(`/workflow/${id}`),
+  execute: (id: string, input?: Record<string, unknown>) =>
+    apiPost<{ executionId: string; pipelineName: string; status: string }>(`/workflow/${id}/execute`, { input }),
+  getExecutions: (page = 1, pageSize = 50, pipelineName?: string) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+    if (pipelineName) params.set('pipelineName', pipelineName)
+    return apiGet<PagedExecutionResult>(`/workflow/executions?${params.toString()}`)
+  },
+  getStatus: (executionId: string) =>
+    apiGet<{ executionId: string; pipelineName: string; status: string; startedAt: string; completedAt: string | null; error: string | null }>(`/workflow/executions/${executionId}/status`),
 }

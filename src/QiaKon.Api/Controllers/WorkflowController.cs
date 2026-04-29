@@ -195,6 +195,64 @@ public class WorkflowController : ControllerBase
             Error = execution.Error
         });
     }
+
+    /// <summary>
+    /// 获取所有执行记录
+    /// </summary>
+    [HttpGet("executions")]
+    public ApiResponse<PagedExecutionResult> GetExecutions(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? pipelineName = null)
+    {
+        var allExecutions = _executions.Values
+            .AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(pipelineName))
+        {
+            allExecutions = allExecutions
+                .Where(e => e.PipelineName.Contains(pipelineName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var totalCount = allExecutions.Count();
+        var items = allExecutions
+            .OrderByDescending(e => e.StartedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(e => new ExecutionRecord
+            {
+                Id = e.Id,
+                PipelineName = e.PipelineName,
+                Status = e.Status,
+                StartedAt = e.StartedAt,
+                CompletedAt = e.CompletedAt,
+                Duration = e.CompletedAt.HasValue
+                    ? (int)(e.CompletedAt.Value - e.StartedAt).TotalMilliseconds
+                    : null,
+                Error = e.Error
+            })
+            .ToList();
+
+        return ApiResponse<PagedExecutionResult>.Ok(new PagedExecutionResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
+    }
+
+    /// <summary>
+    /// 删除工作流定义
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    public ApiResponse DeletePipeline(Guid id)
+    {
+        var removed = _pipelineDefinitions.RemoveAll(d => d.Id == id);
+        return removed > 0
+            ? ApiResponse.Ok("工作流删除成功")
+            : ApiResponse.Fail("工作流不存在", 404);
+    }
 }
 
 public record CreatePipelineRequest(string Name, string? Description = null, Dictionary<string, object?>? Config = null);
@@ -236,4 +294,23 @@ internal class WorkflowExecution
     public DateTime? CompletedAt { get; set; }
     public PipelineResult? Result { get; set; }
     public string? Error { get; set; }
+}
+
+public class ExecutionRecord
+{
+    public Guid Id { get; set; }
+    public string PipelineName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public int? Duration { get; set; }
+    public string? Error { get; set; }
+}
+
+public class PagedExecutionResult
+{
+    public IEnumerable<ExecutionRecord> Items { get; set; } = Enumerable.Empty<ExecutionRecord>();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
 }

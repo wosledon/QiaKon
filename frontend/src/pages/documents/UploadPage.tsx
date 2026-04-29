@@ -22,6 +22,14 @@ function getExtension(filename: string): string {
   return filename.slice(filename.lastIndexOf('.')).toLowerCase()
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
 function isValidFile(file: File): { valid: boolean; error?: string } {
   if (file.size > MAX_SIZE_BYTES) {
     return { valid: false, error: `文件大小超过 ${MAX_SIZE_MB}MB 限制` }
@@ -132,23 +140,26 @@ export function UploadPage() {
 
   if (success) {
     return (
-      <div className="p-4 md:p-8 max-w-2xl mx-auto">
-        <Card className="text-center py-16">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900">上传成功</h2>
-          <p className="mt-2 text-sm text-gray-500">文档已上传，正在跳转至详情页... </p>
-        </Card>
+      <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+        <div className="max-w-2xl mx-auto">
+          <Card className="text-center py-16">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">上传成功</h2>
+            <p className="mt-2 text-sm text-gray-500">文档已上传，正在跳转至详情页... </p>
+          </Card>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <PageHeader title="上传文档" description="上传知识库文档并填写元数据信息" />
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+      <div className="max-w-2xl mx-auto">
+        <PageHeader title="上传文档" description="上传知识库文档并填写元数据信息" />
 
-      <Card>
+        <Card>
         <CardHeader>
           <h3 className="text-base font-semibold text-gray-900">文件上传</h3>
         </CardHeader>
@@ -184,7 +195,7 @@ export function UploadPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                 {uploading && (
                   <div className="mt-2">
                     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -301,5 +312,6 @@ export function UploadPage() {
         </Button>
       </div>
     </div>
+  </div>
   )
 }

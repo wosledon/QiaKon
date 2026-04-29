@@ -171,6 +171,46 @@ public class DocumentsController : ControllerBase
         return ApiResponse<ReparseResponseDto>.Ok(result);
     }
 
+    /// <summary>
+    /// 获取索引队列状态
+    /// </summary>
+    [HttpGet("index/queue")]
+    public ApiResponse<IndexQueueStatusDto> GetIndexQueue()
+    {
+        var status = _documentService.GetIndexQueueStatus();
+        return ApiResponse<IndexQueueStatusDto>.Ok(status);
+    }
+
+    /// <summary>
+    /// 获取索引统计
+    /// </summary>
+    [HttpGet("index/stats")]
+    public ApiResponse<IndexStatsDto> GetIndexStats()
+    {
+        var stats = _documentService.GetIndexStats();
+        return ApiResponse<IndexStatsDto>.Ok(stats);
+    }
+
+    /// <summary>
+    /// 重试失败的索引任务
+    /// </summary>
+    [HttpPost("index/retry-failed")]
+    public ApiResponse<ReindexResponseDto> RetryFailed()
+    {
+        var result = _documentService.RetryFailedIndexing();
+        return ApiResponse<ReindexResponseDto>.Ok(result);
+    }
+
+    /// <summary>
+    /// 重建所有文档索引
+    /// </summary>
+    [HttpPost("index/rebuild")]
+    public ApiResponse<ReindexResponseDto> RebuildIndex()
+    {
+        var result = _documentService.Reindex(null);
+        return ApiResponse<ReindexResponseDto>.Ok(result);
+    }
+
     private Guid GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;

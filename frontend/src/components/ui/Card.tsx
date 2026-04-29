@@ -3,11 +3,17 @@ import { type ReactNode } from 'react'
 interface CardProps {
   children: ReactNode
   className?: string
+  onClick?: () => void
 }
 
-export function Card({ children, className = '' }: CardProps) {
+export function Card({ children, className = '', onClick }: CardProps) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`}>
+    <div
+      className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       {children}
     </div>
   )

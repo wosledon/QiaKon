@@ -45,7 +45,7 @@ export interface Role {
   id: string
   name: string
   description?: string
-  isBuiltIn: boolean
+  isSystem: boolean
   userCount: number
   permissions: PermissionMatrix
 }
@@ -60,31 +60,21 @@ export interface Department {
   createdAt?: string
 }
 
-export interface PermissionItem {
-  view: boolean
-  create: boolean
-  delete: boolean
-}
-
 export interface PermissionMatrix {
-  document: {
-    public: PermissionItem
-    department: PermissionItem
-    all: PermissionItem
-  }
-  graph: {
-    public: PermissionItem
-    department: PermissionItem
-    all: PermissionItem
-  }
-  system: {
-    users: PermissionItem
-    roles: PermissionItem
-    departments: PermissionItem
-    config: { view: boolean; create: boolean }
-    audit: { view: boolean }
-    health: { view: boolean }
-  }
+  canReadPublicDocuments: boolean
+  canWritePublicDocuments: boolean
+  canDeletePublicDocuments: boolean
+  canReadDepartmentDocuments: boolean
+  canWriteDepartmentDocuments: boolean
+  canDeleteDepartmentDocuments: boolean
+  canReadAllDocuments: boolean
+  canWriteAllDocuments: boolean
+  canDeleteAllDocuments: boolean
+  canManageUsers: boolean
+  canManageRoles: boolean
+  canManageDepartments: boolean
+  canViewAuditLogs: boolean
+  canManageSystemConfig: boolean
 }
 
 export interface CreateUserRequest {
@@ -110,6 +100,7 @@ export interface CreateRoleRequest {
 export interface UpdateRoleRequest {
   name?: string
   description?: string
+  permissions?: PermissionMatrix
 }
 
 export interface CreateDepartmentRequest {
@@ -530,4 +521,40 @@ export interface PasswordChangeData {
   currentPassword: string
   newPassword: string
   confirmPassword: string
+}
+
+// === RAG History Types ===
+export interface ConversationHistoryDto {
+  id: string
+  title: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConversationDetailDto {
+  id: string
+  title: string
+  messages: { id: string; role: string; content: string; createdAt: string; sources?: unknown[] }[]
+  createdAt: string
+  updatedAt: string
+}
+
+// === Workflow Types ===
+export interface WorkflowDefinition {
+  id: string
+  name: string
+  description: string
+  stageCount: number
+  createdAt: string
+}
+
+export interface WorkflowExecution {
+  id: string
+  pipelineName: string
+  status: string
+  startedAt: string
+  completedAt: string | null
+  duration: number | null
+  error: string | null
 }

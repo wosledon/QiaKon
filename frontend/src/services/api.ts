@@ -340,10 +340,11 @@ export const configApi = {
 // Connectors API
 export const connectorsApi = {
   list: () => apiGet<Connector[]>('/admin/connectors'),
+  getById: (id: string) => apiGet<Connector>(`/admin/connectors/${id}`),
   add: (data: ConnectorFormData) => apiPost<Connector>('/admin/connectors', data),
   update: (id: string, data: ConnectorFormData) => apiPut<Connector>(`/admin/connectors/${id}`, data),
   delete: (id: string) => apiDelete<void>(`/admin/connectors/${id}`),
-  health: (id: string) => apiPost<{ isHealthy: boolean; message?: string }>(`/admin/connectors/${id}/health`, {}),
+  health: (id: string) => apiPost<{ isHealthy: boolean; message?: string; responseTimeMs?: number }>(`/admin/connectors/${id}/health`, {}),
 }
 
 interface HealthOverviewDto {
@@ -421,7 +422,7 @@ export const profileApi = {
 }
 
 // Workflow API
-export interface WorkflowDefinition {
+export interface WorkflowDefinitionDto {
   id: string
   name: string
   description: string
@@ -429,7 +430,7 @@ export interface WorkflowDefinition {
   createdAt: string
 }
 
-export interface WorkflowExecution {
+export interface WorkflowExecutionDto {
   id: string
   pipelineName: string
   status: string
@@ -440,15 +441,17 @@ export interface WorkflowExecution {
 }
 
 export interface PagedExecutionResult {
-  items: WorkflowExecution[]
+  items: WorkflowExecutionDto[]
   totalCount: number
   page: number
   pageSize: number
 }
 
 export const workflowApi = {
-  list: () => apiGet<WorkflowDefinition[]>('/workflow'),
-  create: (data: { name: string; description?: string }) => apiPost<WorkflowDefinition>('/workflow', data),
+  list: () => apiGet<WorkflowDefinitionDto[]>('/workflow'),
+  get: (id: string) => apiGet<WorkflowDefinitionDto>(`/workflow/${id}`),
+  create: (data: { name: string; description?: string; config?: Record<string, unknown> }) => apiPost<WorkflowDefinitionDto>('/workflow', data),
+  update: (id: string, data: { name?: string; description?: string; config?: Record<string, unknown> }) => apiPut<WorkflowDefinitionDto>(`/workflow/${id}`, data),
   delete: (id: string) => apiDelete<void>(`/workflow/${id}`),
   execute: (id: string, input?: Record<string, unknown>) =>
     apiPost<{ executionId: string; pipelineName: string; status: string }>(`/workflow/${id}/execute`, { input }),
@@ -459,4 +462,8 @@ export const workflowApi = {
   },
   getStatus: (executionId: string) =>
     apiGet<{ executionId: string; pipelineName: string; status: string; startedAt: string; completedAt: string | null; error: string | null }>(`/workflow/executions/${executionId}/status`),
+  getExecutionInput: (executionId: string) =>
+    apiGet<{ executionId: string; pipelineName: string; input: Record<string, unknown>; startedAt: string }>(`/workflow/executions/${executionId}/input`),
+  getExecutionResult: (executionId: string) =>
+    apiGet<import('@/types').WorkflowExecutionDetail>(`/workflow/executions/${executionId}/result`),
 }

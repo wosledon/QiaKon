@@ -239,7 +239,10 @@ public sealed record ConnectorDto(
 public enum ConnectorType
 {
     Http,
-    Npgsql
+    Npgsql,
+    Redis,
+    MessageQueue,
+    Custom
 }
 
 /// <summary>

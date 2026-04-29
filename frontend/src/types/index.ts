@@ -457,7 +457,8 @@ export interface SystemConfig {
 }
 
 // === Connector Types ===
-export type ConnectorType = 'http' | 'npgsql'
+export type ConnectorType = 'http' | 'npgsql' | 'redis' | 'messageQueue' | 'custom'
+export type ConnectorState = 'disconnected' | 'connecting' | 'connected' | 'healthy' | 'unhealthy' | 'closed'
 
 export interface ConnectorEndpoint {
   name: string
@@ -469,11 +470,13 @@ export interface Connector {
   id: string
   name: string
   type: ConnectorType
+  state: ConnectorState
   baseUrl?: string
   endpoints?: ConnectorEndpoint[]
   connectionString?: string
   commandTimeout?: number
-  isHealthy: boolean
+  isHealthy?: boolean
+  lastHealthCheck?: string
 }
 
 export interface ConnectorFormData {
@@ -541,12 +544,22 @@ export interface ConversationDetailDto {
 }
 
 // === Workflow Types ===
+export interface StageInfo {
+  name: string
+  mode: string
+  stepCount: number
+}
+
 export interface WorkflowDefinition {
   id: string
   name: string
   description: string
   stageCount: number
+  stages?: StageInfo[]
+  config?: Record<string, unknown>
   createdAt: string
+  updatedAt?: string
+  isSystem?: boolean
 }
 
 export interface WorkflowExecution {
@@ -557,4 +570,37 @@ export interface WorkflowExecution {
   completedAt: string | null
   duration: number | null
   error: string | null
+}
+
+export interface StepResultDetail {
+  stepName: string
+  status: string
+  errorMessage?: string | null
+  durationMs: number
+  output?: Record<string, unknown> | null
+}
+
+export interface StageResultDetail {
+  stageName: string
+  isSuccess: boolean
+  durationMs: number
+  stepResults: StepResultDetail[]
+}
+
+export interface WorkflowExecutionDetail {
+  executionId: string
+  pipelineName: string
+  status: string
+  isSuccess: boolean
+  stageResults: StageResultDetail[]
+  totalDurationMs: number
+  output?: Record<string, unknown> | null
+  error?: string | null
+}
+
+export interface WorkflowExecutionInput {
+  executionId: string
+  pipelineName: string
+  input: Record<string, unknown>
+  startedAt: string
 }

@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 
 namespace QiaKon.Shared;
 
@@ -12,6 +14,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSharedServices(this IServiceCollection services)
     {
+        // HttpClient for connector health checks
+        services.AddHttpClient("ConnectorHealthCheck")
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                MaxAutomaticRedirections = 3
+            });
+
         // Core services
         services.AddSingleton<IAuthService, MemoryAuthService>();
         services.AddSingleton<IDocumentService, MemoryDocumentService>();

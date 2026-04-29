@@ -17,6 +17,7 @@ import { ChatHistoryPage } from '@/pages/retrieval/ChatHistoryPage'
 import { ChatHistoryDetailPage } from '@/pages/retrieval/ChatHistoryDetailPage'
 import { WorkflowsPage } from '@/pages/workflows/WorkflowsPage'
 import { WorkflowRunsPage } from '@/pages/workflows/WorkflowRunsPage'
+import { WorkflowDetailPage } from '@/pages/workflows/WorkflowDetailPage'
 import { AdminDepartmentsPage } from '@/pages/admin/DepartmentsPage'
 import { AdminRolesPage } from '@/pages/admin/RolesPage'
 import { AdminUsersPage } from '@/pages/admin/UsersPage'
@@ -51,6 +52,7 @@ const protectedRoutes: RouteObject[] = [
       { path: '/retrieval/history/:id', element: <ChatHistoryDetailPage /> },
       { path: '/workflows', element: <WorkflowsPage /> },
       { path: '/workflows/runs', element: <WorkflowRunsPage /> },
+      { path: '/workflows/:id', element: <WorkflowDetailPage /> },
       {
         element: <AdminGuard />,
         children: [

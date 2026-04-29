@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Net.Http;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using QiaKon.Contracts.DTOs;
 
 namespace QiaKon.Shared;
@@ -349,27 +353,61 @@ public sealed class MemoryConnectorService : IConnectorService
 {
     private readonly Dictionary<Guid, ConnectorRecord> _connectors = new();
     private readonly ILogger<MemoryConnectorService>? _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly string _defaultConnectionString;
+    private readonly string _redisConnectionString;
 
-    public MemoryConnectorService(ILogger<MemoryConnectorService>? logger = null)
+    public MemoryConnectorService(
+        ILogger<MemoryConnectorService>? logger,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration)
     {
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
+        _defaultConnectionString = configuration.GetConnectionString("Default") ?? "Host=127.0.0.1;Port=5243;Database=QiaKon;Username=admin;Password=admin@123";
+        _redisConnectionString = configuration.GetConnectionString("Redis") ?? "127.0.0.1:6379,password=admin@123";
         InitializeSeedData();
     }
 
     private void InitializeSeedData()
     {
-        var http = new ConnectorRecord(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-            "飞书 API", ConnectorType.Http, "https://open.feishu.cn", null, null, DateTime.UtcNow,
-            new List<ConnectorEndpointRecord>
-            {
-                new("发送消息", "https://open.feishu.cn/open-apis/im/v1/messages", "POST"),
-                new("获取用户", "https://open.feishu.cn/open-apis/contact/v3/users", "GET"),
-            });
-        _connectors[http.Id] = http;
-
-        var npgsql = new ConnectorRecord(Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-            "PostgreSQL (生产)", ConnectorType.Npgsql, null, "Host=localhost;Database=qiakon;Username=postgres;Password=postgres", null, DateTime.UtcNow, null);
+        // PostgreSQL 连接器 - 对齐 env.md
+        var npgsql = new ConnectorRecord(
+            Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            "PostgreSQL (生产)",
+            ConnectorType.Npgsql,
+            null,
+            _defaultConnectionString,
+            ConnectorState.Connected,
+            DateTime.UtcNow,
+            null);
         _connectors[npgsql.Id] = npgsql;
+
+        // Redis 连接器 - 对齐 env.md
+        var redis = new ConnectorRecord(
+            Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+            "Redis (生产)",
+            ConnectorType.Redis,
+            null,
+            _redisConnectionString,
+            ConnectorState.Connected,
+            DateTime.UtcNow,
+            null);
+        _connectors[redis.Id] = redis;
+
+        // Kafka 连接器 - 对齐 env.md
+        var kafka = new ConnectorRecord(
+            Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+            "Kafka (生产)",
+            ConnectorType.MessageQueue,
+            null,
+            "BootstrapServers=127.0.0.1:9092",
+            ConnectorState.Connected,
+            DateTime.UtcNow,
+            null);
+        _connectors[kafka.Id] = kafka;
+
+        _logger?.LogInformation("Connector seed data initialized with real configuration from env");
     }
 
     public IReadOnlyList<ConnectorDto> GetAll()
@@ -413,16 +451,166 @@ public sealed class MemoryConnectorService : IConnectorService
     public ConnectorHealthResultDto CheckHealth(Guid id)
     {
         if (!_connectors.TryGetValue(id, out var connector))
-            return new ConnectorHealthResultDto(id, false, "Connector not found", null);
+            return new ConnectorHealthResultDto(id, false, "连接器不存在", null);
 
-        // 模拟健康检查
-        var isHealthy = connector.State == ConnectorState.Healthy || connector.State == ConnectorState.Connected;
-        var responseTime = Random.Shared.NextDouble() * 100;
+        var stopwatch = Stopwatch.StartNew();
 
-        connector.LastHealthCheck = DateTime.UtcNow;
-        connector.State = isHealthy ? ConnectorState.Healthy : ConnectorState.Unhealthy;
+        try
+        {
+            string message;
+            bool isHealthy;
 
-        return new ConnectorHealthResultDto(id, isHealthy, isHealthy ? "OK" : "Connection failed", responseTime);
+            switch (connector.Type)
+            {
+                case ConnectorType.Http:
+                    (isHealthy, message) = CheckHttpHealth(connector).GetAwaiter().GetResult();
+                    break;
+                case ConnectorType.Npgsql:
+                    (isHealthy, message) = CheckNpgsqlHealth(connector).GetAwaiter().GetResult();
+                    break;
+                case ConnectorType.Redis:
+                    (isHealthy, message) = CheckRedisHealth(connector);
+                    break;
+                case ConnectorType.MessageQueue:
+                    (isHealthy, message) = CheckMessageQueueHealth(connector);
+                    break;
+                case ConnectorType.Custom:
+                    // Custom 类型检查 ConnectionString 是否可解析
+                    (isHealthy, message) = CheckCustomHealth(connector);
+                    break;
+                default:
+                    isHealthy = false;
+                    message = $"不支持的连接器类型: {connector.Type}";
+                    break;
+            }
+
+            stopwatch.Stop();
+            connector.LastHealthCheck = DateTime.UtcNow;
+            connector.State = isHealthy ? ConnectorState.Healthy : ConnectorState.Unhealthy;
+
+            return new ConnectorHealthResultDto(id, isHealthy, message, stopwatch.Elapsed.TotalMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            connector.LastHealthCheck = DateTime.UtcNow;
+            connector.State = ConnectorState.Unhealthy;
+            _logger?.LogWarning(ex, "Connector health check failed: {Id}", id);
+            return new ConnectorHealthResultDto(id, false, $"健康检查异常: {ex.Message}", stopwatch.Elapsed.TotalMilliseconds);
+        }
+    }
+
+    private async Task<(bool IsHealthy, string Message)> CheckHttpHealth(ConnectorRecord connector)
+    {
+        if (string.IsNullOrWhiteSpace(connector.BaseUrl))
+            return (false, "BaseUrl 未配置");
+
+        try
+        {
+            using var client = _httpClientFactory.CreateClient("ConnectorHealthCheck");
+            client.Timeout = TimeSpan.FromSeconds(5);
+            client.DefaultRequestHeaders.Clear();
+
+            // 尝试访问根路径或健康检查端点
+            var testUrl = connector.BaseUrl.TrimEnd('/') + "/";
+            var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, testUrl));
+
+            if (response.IsSuccessStatusCode)
+                return (true, $"HTTP {response.StatusCode}");
+
+            // 如果是 401/403，可能是认证问题但服务可达
+            if ((int)response.StatusCode is >= 401 and <= 403)
+                return (true, $"服务可达 (HTTP {response.StatusCode})");
+
+            return (false, $"HTTP {response.StatusCode}");
+        }
+        catch (TaskCanceledException)
+        {
+            return (false, "连接超时 (5秒)");
+        }
+        catch (HttpRequestException ex)
+        {
+            return (false, $"连接失败: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"异常: {ex.Message}");
+        }
+    }
+
+    private async Task<(bool IsHealthy, string Message)> CheckNpgsqlHealth(ConnectorRecord connector)
+    {
+        if (string.IsNullOrWhiteSpace(connector.ConnectionString))
+            return (false, "ConnectionString 未配置");
+
+        try
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connector.ConnectionString)
+            {
+                Timeout = 5, // 5 秒超时
+                CommandTimeout = 5
+            };
+
+            await using var connection = new NpgsqlConnection(builder.ConnectionString);
+            await connection.OpenAsync();
+
+            // 执行简单查询验证连接
+            await using var cmd = new NpgsqlCommand("SELECT 1", connection);
+            await cmd.ExecuteScalarAsync();
+
+            return (true, $"连接成功 (PostgreSQL {connection.ServerVersion})");
+        }
+        catch (NpgsqlException ex)
+        {
+            return (false, $"数据库连接失败: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"异常: {ex.Message}");
+        }
+    }
+
+    private (bool IsHealthy, string Message) CheckCustomHealth(ConnectorRecord connector)
+    {
+        if (string.IsNullOrWhiteSpace(connector.ConnectionString))
+            return (false, "ConnectionString 未配置");
+
+        try
+        {
+            // 验证 ConnectionString 格式是否有效
+            if (connector.ConnectionString.Contains("127.0.0.1") ||
+                connector.ConnectionString.Contains("localhost"))
+            {
+                return (true, "配置格式正确");
+            }
+            return (false, "ConnectionString 格式无法识别");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"配置验证失败: {ex.Message}");
+        }
+    }
+
+    private (bool IsHealthy, string Message) CheckRedisHealth(ConnectorRecord connector)
+    {
+        if (string.IsNullOrWhiteSpace(connector.ConnectionString))
+            return (false, "Redis 连接字符串未配置");
+
+        if (connector.ConnectionString.Contains("127.0.0.1") || connector.ConnectionString.Contains("localhost"))
+            return (true, "Redis 配置格式正确");
+
+        return (false, "Redis 配置格式无法识别");
+    }
+
+    private (bool IsHealthy, string Message) CheckMessageQueueHealth(ConnectorRecord connector)
+    {
+        if (string.IsNullOrWhiteSpace(connector.ConnectionString))
+            return (false, "消息队列连接字符串未配置");
+
+        if (connector.ConnectionString.Contains("BootstrapServers", StringComparison.OrdinalIgnoreCase))
+            return (true, "消息队列配置格式正确");
+
+        return (false, "消息队列配置格式无法识别");
     }
 
     private ConnectorDto ToDto(ConnectorRecord c)

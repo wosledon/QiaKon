@@ -57,7 +57,7 @@ export function AdminHealthPage() {
   }, [fetchHealth])
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="健康检查" description="查看系统各组件健康状态">
         <Button variant="ghost" size="sm" onClick={fetchHealth} isLoading={loading}>
           <RefreshCw className="w-4 h-4" />
@@ -65,6 +65,15 @@ export function AdminHealthPage() {
       </PageHeader>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {!loading && components.length === 0 && (
+          <Card className="sm:col-span-2 lg:col-span-3 border-dashed">
+            <CardContent className="py-12 text-center">
+              <Activity className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+              <p className="text-sm font-medium text-gray-600">暂未获取到健康数据</p>
+              <p className="mt-1 text-xs text-gray-400">可点击右上角刷新，或稍后再次查看。</p>
+            </CardContent>
+          </Card>
+        )}
         {components.map(c => (
           <div
             key={c.name}

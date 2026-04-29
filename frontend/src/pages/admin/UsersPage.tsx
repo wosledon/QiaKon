@@ -6,7 +6,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { Card, CardContent } from '@/components/ui/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { adminApi } from '@/services/api'
-import { useAuth } from '@/stores/authStore'
+import { isAdminRole, useAuth } from '@/stores/authStore'
 import type { AdminUser, Department, Role } from '@/types'
 import {
   Search,
@@ -72,7 +72,7 @@ export function AdminUsersPage() {
     role: 'DepartmentMember',
   })
 
-  const isAdmin = currentUser?.role === 'Admin'
+  const isAdmin = isAdminRole(currentUser?.role)
 
   // 权限检查
   useEffect(() => {

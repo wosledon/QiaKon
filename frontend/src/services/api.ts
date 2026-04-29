@@ -53,6 +53,7 @@ import type {
   User,
   UserFilters,
 } from '@/types'
+import { clearAuthStorage } from '@/stores/authStore'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
@@ -74,6 +75,12 @@ function buildHeaders(init?: HeadersInit, includeContentType = true): Headers {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
+    if (response.status === 401) {
+      clearAuthStorage()
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.replace('/login')
+      }
+    }
     let message = `请求失败 (${response.status})`
     let code: string | undefined
     try {
@@ -306,9 +313,57 @@ export const connectorsApi = {
   health: (id: string) => apiPost<{ isHealthy: boolean; message?: string }>(`/admin/connectors/${id}/health`, {}),
 }
 
+interface HealthOverviewDto {
+  overallStatus: string
+  checkedAt: string
+  components: Record<string, { status: string; responseTimeMs: number; message?: string | null }>
+}
+
+function normalizeHealthStatus(status?: string): ComponentHealth['status'] {
+  switch (status?.toLowerCase()) {
+    case 'healthy':
+      return 'healthy'
+    case 'degraded':
+      return 'degraded'
+    case 'unhealthy':
+      return 'unhealthy'
+    default:
+      return 'unknown'
+  }
+}
+
 // Health API
 export const healthApi = {
-  overview: () => apiGet<ComponentHealth[]>('/health'),
+  overview: async () => {
+    try {
+      const data = await apiGet<HealthOverviewDto>('/health')
+      return Object.entries(data.components ?? {}).map(([name, component]) => ({
+        name,
+        status: normalizeHealthStatus(component.status),
+        responseTime: component.responseTimeMs,
+        error: component.message ?? undefined,
+        details: {
+          overallStatus: data.overallStatus,
+          checkedAt: data.checkedAt,
+        },
+      })) satisfies ComponentHealth[]
+    } catch {
+      const fallback = await apiGet<SystemHealth[]>('/dashboard/health')
+      return fallback.map((component) => ({
+        name: component.name,
+        status:
+          component.status === 'active'
+            ? 'healthy'
+            : component.status === 'warning'
+            ? 'degraded'
+            : component.status === 'error'
+            ? 'unhealthy'
+            : 'unknown',
+        responseTime: component.responseTime,
+        error: component.message,
+      })) satisfies ComponentHealth[]
+    }
+  },
   component: (name: string) => apiGet<ComponentHealth>(`/health/${name}`),
 }
 

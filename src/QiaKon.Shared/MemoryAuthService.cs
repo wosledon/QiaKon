@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using QiaKon.Contracts;
@@ -21,12 +22,13 @@ public sealed class MemoryAuthService : IAuthService
     private readonly string _jwtIssuer;
     private readonly string _jwtAudience;
 
-    public MemoryAuthService(ILogger<MemoryAuthService>? logger = null)
+    public MemoryAuthService(IConfiguration? configuration = null, ILogger<MemoryAuthService>? logger = null)
     {
         _logger = logger;
-        _jwtSecret = "QiaKon-Dev-Secret-Key-For-Development-Only-Min-32-Chars!";
-        _jwtIssuer = "QiaKon";
-        _jwtAudience = "QiaKon.Api";
+        var jwtSection = configuration?.GetSection("Jwt");
+        _jwtSecret = jwtSection?["SecretKey"] ?? "QiaKon-Dev-Secret-Key-For-Development-Only-Min-32-Chars!";
+        _jwtIssuer = jwtSection?["Issuer"] ?? "QiaKon";
+        _jwtAudience = jwtSection?["Audience"] ?? "QiaKon.Api";
 
         InitializeSeedData();
     }

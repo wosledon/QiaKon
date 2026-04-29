@@ -213,7 +213,7 @@ export function AdminLlmModelsPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="大模型管理" description="管理大语言模型接入与参数配置">
         <Button onClick={openAddProvider} size="sm">
           <Plus className="w-4 h-4 mr-1" /> 添加供应商

@@ -62,7 +62,7 @@ export function AdminConfigPage() {
 
   if (!config && loading) {
     return (
-      <div>
+      <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
         <PageHeader title="系统配置" description="平台全局参数与运行时配置" />
         <div className="text-center py-12 text-gray-400">加载中...</div>
       </div>
@@ -70,7 +70,7 @@ export function AdminConfigPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="系统配置" description="平台全局参数与运行时配置">
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={handleReset} isLoading={saving}>

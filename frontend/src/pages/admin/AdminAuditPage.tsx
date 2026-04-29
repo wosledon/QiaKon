@@ -55,7 +55,7 @@ export function AdminAuditPage() {
   const totalPages = Math.ceil(total / pageSize)
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="审计日志" description="查看系统操作审计记录" />
 
       <Card className="mb-4">
@@ -120,11 +120,11 @@ export function AdminAuditPage() {
           {logs.length === 0 && !loading && (
             <p className="text-sm text-gray-400 text-center py-8">暂无审计日志</p>
           )}
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-hidden">
             {logs.map(log => (
               <div key={log.id} className="border border-gray-100 rounded-lg overflow-hidden">
                 <div
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
+                  className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 overflow-x-auto"
                   onClick={() => toggleExpand(log.id)}
                 >
                   {expanded.has(log.id) ? (
@@ -132,7 +132,7 @@ export function AdminAuditPage() {
                   ) : (
                     <ChevronDown className="w-4 h-4 text-gray-400" />
                   )}
-                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-2 items-center">
+                  <div className="flex-1 min-w-[720px] grid grid-cols-12 gap-2 items-center">
                     <span className="col-span-2 text-sm text-gray-900 truncate">{log.username}</span>
                     <span className="col-span-2 text-xs text-gray-500">{log.operationType}</span>
                     <span className="col-span-2 text-xs text-gray-500 truncate">{log.resourceType}</span>

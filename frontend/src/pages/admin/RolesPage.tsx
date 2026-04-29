@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { adminApi } from '@/services/api'
-import { useAuth } from '@/stores/authStore'
+import { isAdminRole, useAuth } from '@/stores/authStore'
 import type { PermissionItem, PermissionMatrix, Role } from '@/types'
 import {
   Plus,
@@ -256,7 +256,7 @@ const matrixRows = buildMatrixRows()
 export function AdminRolesPage() {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
-  const isAdmin = currentUser?.role === 'Admin'
+  const isAdmin = isAdminRole(currentUser?.role)
 
   const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(false)

@@ -1,4 +1,4 @@
-import { useAuth } from '@/stores/authStore'
+import { isAdminRole, useAuth } from '@/stores/authStore'
 import { Navigate, Outlet } from 'react-router-dom'
 
 export function AdminGuard() {
@@ -8,7 +8,7 @@ export function AdminGuard() {
     return <Navigate to="/login" replace />
   }
 
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = isAdminRole(user?.role)
   if (!isAdmin) {
     return <Navigate to="/" replace />
   }

@@ -128,7 +128,7 @@ export function AdminConnectorsPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="连接器管理" description="配置外部系统连接器">
         <Button onClick={openAdd} size="sm">
           <Plus className="w-4 h-4 mr-1" /> 添加连接器

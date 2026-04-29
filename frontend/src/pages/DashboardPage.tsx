@@ -63,7 +63,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
       <PageHeader title="工作台" description="系统概览与核心指标">
         <Button variant="ghost" size="sm" onClick={fetchData} isLoading={loading}>
           <RefreshCw className="w-4 h-4" />

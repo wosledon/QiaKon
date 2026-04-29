@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { adminApi } from '@/services/api'
-import { useAuth } from '@/stores/authStore'
+import { isAdminRole, useAuth } from '@/stores/authStore'
 import type { AdminUser, Department } from '@/types'
 import {
   Plus,
@@ -53,7 +53,7 @@ function flattenTree(nodes: TreeNode[], expandedIds: string[]): TreeNode[] {
 export function AdminDepartmentsPage() {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
-  const isAdmin = currentUser?.role === 'Admin'
+  const isAdmin = isAdminRole(currentUser?.role)
 
   const [departments, setDepartments] = useState<Department[]>([])
   const [tree, setTree] = useState<TreeNode[]>([])

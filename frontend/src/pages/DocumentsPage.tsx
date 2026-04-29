@@ -39,7 +39,7 @@ export function DocumentsPage() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await documentApi.list(page, pageSize)
+      const data = await documentApi.list({ page, pageSize })
       setDocuments(data.items)
       setTotalCount(data.totalCount)
     } catch (err) {

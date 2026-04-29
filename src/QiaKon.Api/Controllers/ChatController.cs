@@ -6,11 +6,21 @@ using System.Text.Json;
 namespace QiaKon.Api.Controllers;
 
 [ApiController]
-[Route("api")]
+[Route("api/retrieval")]
 public class ChatController : ControllerBase
 {
     private readonly IRagService _ragService;
     private readonly ILogger<ChatController> _logger;
+
+    private static readonly List<LlmModelDto> _availableModels =
+    [
+        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Guid.Empty, "Qwen-Max", "qwen-max", LlmModelType.Inference, null, 128000, true, true),
+        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab"), Guid.Empty, "Qwen-Turbo", "qwen-turbo", LlmModelType.Inference, null, 128000, true, false),
+        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaac"), Guid.Empty, "GPT-4o", "gpt-4o", LlmModelType.Inference, null, 128000, true, false),
+        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaad"), Guid.Empty, "Claude-3.5-Sonnet", "claude-3-5-sonnet-20241022", LlmModelType.Inference, null, 200000, true, false),
+    ];
+
+    private static readonly Dictionary<Guid, Guid> _conversationModels = new();
 
     public ChatController(IRagService ragService, ILogger<ChatController> logger)
     {
@@ -22,7 +32,6 @@ public class ChatController : ControllerBase
     /// RAG检索
     /// </summary>
     [HttpPost("retrieve")]
-    [HttpPost("rag/retrieve")]
     public ApiResponse<RetrieveResponseDto> Retrieve([FromBody] RetrieveRequestDto request)
     {
         try
@@ -40,7 +49,7 @@ public class ChatController : ControllerBase
     /// <summary>
     /// RAG问答
     /// </summary>
-    [HttpPost("rag/chat")]
+    [HttpPost("chat")]
     public ApiResponse<RagChatResponseDto> Chat([FromBody] RagChatRequestDto request)
     {
         try
@@ -59,7 +68,7 @@ public class ChatController : ControllerBase
     /// <summary>
     /// 流式RAG问答
     /// </summary>
-    [HttpPost("rag/chat/stream")]
+    [HttpPost("chat/stream")]
     public async Task ChatStream([FromBody] RagChatRequestDto request)
     {
         Response.ContentType = "text/event-stream";
@@ -87,4 +96,40 @@ public class ChatController : ControllerBase
             await Response.WriteAsync($"event: error\ndata: {JsonSerializer.Serialize(new { message = ex.Message })}\n\n");
         }
     }
+
+    /// <summary>
+    /// 获取可用的推理模型列表
+    /// </summary>
+    [HttpGet("models")]
+    public ApiResponse<IReadOnlyList<LlmModelDto>> GetModels()
+    {
+        return ApiResponse<IReadOnlyList<LlmModelDto>>.Ok(_availableModels);
+    }
+
+    /// <summary>
+    /// 切换当前对话使用的模型
+    /// </summary>
+    [HttpPost("models/switch")]
+    public ApiResponse<bool> SwitchModel([FromBody] SwitchModelRequestDto request)
+    {
+        var model = _availableModels.FirstOrDefault(m => m.Id == request.ModelId);
+        if (model == null)
+        {
+            return ApiResponse<bool>.Fail("模型不存在", 404);
+        }
+
+        if (!model.IsEnabled)
+        {
+            return ApiResponse<bool>.Fail("模型未启用", 400);
+        }
+
+        if (request.ConversationId.HasValue)
+        {
+            _conversationModels[request.ConversationId.Value] = request.ModelId;
+        }
+
+        return ApiResponse<bool>.Ok(true, $"已切换到模型: {model.Name}");
+    }
 }
+
+public sealed record SwitchModelRequestDto(Guid ModelId, Guid? ConversationId = null);

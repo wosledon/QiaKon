@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QiaKon.Contracts.DTOs;
 using QiaKon.Shared;
@@ -21,6 +22,7 @@ public class AuthController : ControllerBase
     /// 用户登录
     /// </summary>
     [HttpPost("login")]
+    [AllowAnonymous]
     public ApiResponse<LoginResponseDto> Login([FromBody] LoginRequestDto request)
     {
         var result = _authService.Login(request);
@@ -39,21 +41,24 @@ public class AuthController : ControllerBase
     /// 刷新Token
     /// </summary>
     [HttpPost("refresh")]
+    [AllowAnonymous]
     public ApiResponse<LoginResponseDto> Refresh([FromBody] RefreshTokenRequestDto request)
     {
         // 简化的刷新逻辑 - 实际应该验证refresh token
+        // 当前版本直接返回失败，提示客户端需要重新登录
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
             return ApiResponse<LoginResponseDto>.Fail("Refresh token is required", 400);
         }
 
-        return ApiResponse<LoginResponseDto>.Fail("Refresh token not supported in this version", 501);
+        return ApiResponse<LoginResponseDto>.Fail("请重新登录以获取新Token", 401);
     }
 
     /// <summary>
     /// 获取当前用户信息
     /// </summary>
     [HttpGet("me")]
+    [Authorize]
     public ApiResponse<UserDto> GetCurrentUser()
     {
         var userId = GetCurrentUserId();

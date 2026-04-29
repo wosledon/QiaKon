@@ -83,6 +83,7 @@ public sealed class MemoryRagService : IRagService
 
         var response = GenerateAnswer(request.Query, retrieved.Results);
         session.Messages.Add(new ChatMessageRecord("assistant", response));
+        session.UpdatedAt = DateTime.UtcNow;
 
         var sources = retrieved.Results
             .Select(result => new RagSourceDto(
@@ -96,19 +97,50 @@ public sealed class MemoryRagService : IRagService
         return new RagChatResponseDto(response, sources, conversationId, session.Messages.Count / 2);
     }
 
+    public IReadOnlyList<ConversationHistoryDto> GetConversationHistory(int offset, int limit, Guid? userId = null)
+    {
+        return _sessions.Values
+            .OrderByDescending(s => s.UpdatedAt)
+            .Skip(offset)
+            .Take(limit)
+            .Select(s => new ConversationHistoryDto(s.Id, s.Title, s.Messages.Count, s.CreatedAt, s.UpdatedAt))
+            .ToList();
+    }
+
+    public ConversationDetailDto? GetConversationDetail(Guid conversationId)
+    {
+        if (!_sessions.TryGetValue(conversationId, out var session))
+            return null;
+
+        var messages = session.Messages.Select(m => new ChatMessageDto(
+            m.Id,
+            m.Role,
+            m.Content,
+            m.CreatedAt,
+            null))
+            .ToList();
+
+        return new ConversationDetailDto(session.Id, session.Title, messages, session.CreatedAt, session.UpdatedAt);
+    }
+
+    public bool DeleteConversation(Guid conversationId)
+    {
+        return _sessions.Remove(conversationId);
+    }
+
     private static string GenerateAnswer(string query, IReadOnlyList<RetrieveResultItemDto> results)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"围绕“{query}”，我检索到以下关键信息：");
+        sb.AppendLine($"Based on your question \"{query}\", I found the following key information:");
         sb.AppendLine();
 
         foreach (var result in results.Take(3))
         {
-            sb.AppendLine($"- {result.DocumentTitle}：{TruncateText(result.Text, 110)}");
+            sb.AppendLine($"- {result.DocumentTitle}: {TruncateText(result.Text, 110)}");
         }
 
         sb.AppendLine();
-        sb.Append("如果你需要，我可以继续基于这些资料帮你拆解实施步骤、梳理模块关系，或总结成更短的结论。");
+        sb.Append("If needed, I can continue helping you break down implementation steps, analyze module relationships, or summarize into shorter conclusions.");
         return sb.ToString();
     }
 
@@ -147,7 +179,23 @@ public sealed class MemoryRagService : IRagService
 
     private sealed record RetrievalChunk(Guid Id, Guid DocumentId, string DocumentTitle, string Text, int StartIndex, int EndIndex);
 
-    private sealed record ChatSessionRecord(Guid Id, string Title, List<ChatMessageRecord> Messages, DateTime CreatedAt);
+    private sealed class ChatSessionRecord
+    {
+        public Guid Id { get; }
+        public string Title { get; }
+        public List<ChatMessageRecord> Messages { get; }
+        public DateTime CreatedAt { get; }
+        public DateTime UpdatedAt { get; set; }
+
+        public ChatSessionRecord(Guid id, string title, List<ChatMessageRecord> messages, DateTime createdAt)
+        {
+            Id = id;
+            Title = title;
+            Messages = messages;
+            CreatedAt = createdAt;
+            UpdatedAt = createdAt;
+        }
+    }
 
     private sealed record ChatMessageRecord(string Role, string Content)
     {

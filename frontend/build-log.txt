@@ -1,0 +1,32 @@
+
+> qiakon-frontend@0.1.0 build
+> tsc -b && vite build
+
+src/pages/documents/DetailPage.tsx(4,16): error TS6133: 'CardHeader' is declared but its value is never read.
+src/pages/documents/DetailPage.tsx(9,15): error TS2305: Module '"@/types"' has no exported member 'DocumentDetail'.
+src/pages/documents/DetailPage.tsx(9,31): error TS2305: Module '"@/types"' has no exported member 'DocumentChunk'.
+src/pages/documents/DetailPage.tsx(58,38): error TS2339: Property 'get' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/DetailPage.tsx(75,25): error TS2339: Property 'reparse' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/DetailPage.tsx(88,25): error TS2339: Property 'reindex' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/DocumentDetailPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/documents/DocumentEditPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/documents/DocumentsListPage.tsx(11,80): error TS6133: 'ArrowUpDown' is declared but its value is never read.
+src/pages/documents/DocumentsListPage.tsx(91,43): error TS2345: Argument of type '{ page: number; pageSize: number; status: string | undefined; department: string | undefined; search: string | undefined; sortBy: string; sortOrder: "asc" | "desc"; }' is not assignable to parameter of type 'number'.
+src/pages/documents/DocumentsListPage.tsx(137,25): error TS2339: Property 'batchDelete' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/DocumentUploadPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/documents/EditPage.tsx(31,38): error TS2339: Property 'get' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/EditPage.tsx(57,25): error TS2339: Property 'update' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/IndexPage.tsx(8,15): error TS2305: Module '"@/types"' has no exported member 'IndexQueueItem'.
+src/pages/documents/IndexPage.tsx(8,31): error TS2305: Module '"@/types"' has no exported member 'IndexStats'.
+src/pages/documents/IndexPage.tsx(45,21): error TS2339: Property 'indexQueue' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/IndexPage.tsx(46,21): error TS2339: Property 'indexStats' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/IndexPage.tsx(67,25): error TS2339: Property 'retryFailed' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/IndexPage.tsx(80,25): error TS2339: Property 'rebuildIndex' does not exist on type '{ list: (page?: number, pageSize?: number) => Promise<PagedList<Document>>; upload: (file: File, metadata?: Record<string, string> | undefined) => Promise<...>; delete: (id: string) => Promise<...>; }'.
+src/pages/documents/UploadPage.tsx(49,10): error TS6133: 'uploadedDocId' is declared but its value is never read.
+src/pages/documents/UploadPage.tsx(111,60): error TS2554: Expected 1-2 arguments, but got 3.
+src/pages/documents/UploadPage.tsx(111,61): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/graphs/GraphEntityDetailPage.tsx(36,10): error TS6133: 'relations' is declared but its value is never read.
+src/pages/graphs/GraphQueryPage.tsx(168,43): error TS6133: 'r' is declared but its value is never read.
+src/pages/retrieval/ChatHistoryDetailPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/workflows/WorkflowRunsPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/workflows/WorkflowsPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.

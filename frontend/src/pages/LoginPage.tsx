@@ -1,15 +1,24 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { authApi } from '@/services/api'
 import { useAuth } from '@/stores/authStore'
 
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // 已登录用户自动跳转首页
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -24,6 +33,7 @@ export function LoginPage() {
     try {
       const response = await authApi.login({ username, password })
       login(response)
+      navigate('/', { replace: true })
     } catch (err) {
       const message = err instanceof Error ? err.message : '登录失败，请重试'
       setError(message)

@@ -58,9 +58,39 @@ public sealed class MemoryGraphService : IGraphService
     public EntityPagedResultDto GetEntities(string? label, int offset, int limit)
     {
         var query = _entities.Values.AsEnumerable();
+
         if (!string.IsNullOrWhiteSpace(label))
         {
             query = query.Where(e => e.Type.Contains(label, StringComparison.OrdinalIgnoreCase) || e.Name.Contains(label, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var totalCount = query.LongCount();
+        var items = query.OrderBy(e => e.Name).Skip(offset).Take(limit).Select(ToDto).ToList();
+        return new EntityPagedResultDto(items, totalCount, offset, limit);
+    }
+
+    public EntityPagedResultDto GetEntitiesFiltered(string? name, string? type, Guid? departmentId, bool? isPublic, int offset, int limit)
+    {
+        var query = _entities.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            query = query.Where(e => e.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            query = query.Where(e => e.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(e => e.DepartmentId == departmentId.Value);
+        }
+
+        if (isPublic.HasValue)
+        {
+            query = query.Where(e => e.IsPublic == isPublic.Value);
         }
 
         var totalCount = query.LongCount();
@@ -134,9 +164,34 @@ public sealed class MemoryGraphService : IGraphService
     public RelationListResultDto GetRelations(int offset, int limit, string? type = null)
     {
         var query = _relations.Values.AsEnumerable();
+
         if (!string.IsNullOrWhiteSpace(type))
         {
             query = query.Where(r => r.Type.Contains(type, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var totalCount = query.LongCount();
+        var items = query.OrderBy(r => r.Type).Skip(offset).Take(limit).Select(ToRelationDto).ToList();
+        return new RelationListResultDto(items, totalCount);
+    }
+
+    public RelationListResultDto GetRelationsFiltered(string? type, string? sourceEntityId, string? targetEntityId, int offset, int limit)
+    {
+        var query = _relations.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            query = query.Where(r => r.Type.Contains(type, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(sourceEntityId))
+        {
+            query = query.Where(r => r.SourceId == sourceEntityId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetEntityId))
+        {
+            query = query.Where(r => r.TargetId == targetEntityId);
         }
 
         var totalCount = query.LongCount();
@@ -159,6 +214,11 @@ public sealed class MemoryGraphService : IGraphService
 
         AddRelation(relation);
         return ToRelationDto(relation);
+    }
+
+    public bool DeleteRelation(string id)
+    {
+        return _relations.Remove(id);
     }
 
     public GraphQueryResponseDto Query(GraphQueryRequestDto request)
@@ -204,6 +264,288 @@ public sealed class MemoryGraphService : IGraphService
         }
 
         return new GraphQueryResponseDto(paths);
+    }
+
+    /// <summary>
+    /// BFS路径查询
+    /// </summary>
+    public PathQueryResultDto FindPaths(string sourceId, string targetId, int maxPaths, int maxHops)
+    {
+        if (!_entities.ContainsKey(sourceId) || !_entities.ContainsKey(targetId))
+        {
+            return new PathQueryResultDto(Array.Empty<GraphPathDto>(), 0);
+        }
+
+        var paths = new List<GraphPathDto>();
+        var visited = new Dictionary<string, int>();
+        var queue = new Queue<List<(string EntityId, string RelationId, string Direction)>>();
+
+        queue.Enqueue(new List<(string, string, string)> { (sourceId, "", "") });
+        visited[sourceId] = 0;
+
+        while (queue.Count > 0 && paths.Count < maxPaths)
+        {
+            var currentPath = queue.Dequeue();
+            var currentId = currentPath.Last().EntityId;
+            var currentDepth = currentPath.Count - 1;
+
+            if (currentDepth >= maxHops)
+                continue;
+
+            var outgoingRelations = _relations.Values.Where(r => r.SourceId == currentId);
+            var incomingRelations = _relations.Values.Where(r => r.TargetId == currentId);
+
+            foreach (var rel in outgoingRelations)
+            {
+                var newPath = new List<(string, string, string)>(currentPath) { (rel.TargetId, rel.Id, "outgoing") };
+                if (rel.TargetId == targetId)
+                {
+                    var pathDto = BuildPathDto(newPath);
+                    if (pathDto.TotalHops <= maxHops)
+                        paths.Add(pathDto);
+                }
+                else if (!visited.ContainsKey(rel.TargetId) || visited[rel.TargetId] > currentDepth + 1)
+                {
+                    visited[rel.TargetId] = currentDepth + 1;
+                    queue.Enqueue(newPath);
+                }
+            }
+
+            foreach (var rel in incomingRelations)
+            {
+                var newPath = new List<(string, string, string)>(currentPath) { (rel.SourceId, rel.Id, "incoming") };
+                if (rel.SourceId == targetId)
+                {
+                    var pathDto = BuildPathDto(newPath);
+                    if (pathDto.TotalHops <= maxHops)
+                        paths.Add(pathDto);
+                }
+                else if (!visited.ContainsKey(rel.SourceId) || visited[rel.SourceId] > currentDepth + 1)
+                {
+                    visited[rel.SourceId] = currentDepth + 1;
+                    queue.Enqueue(newPath);
+                }
+            }
+        }
+
+        return new PathQueryResultDto(paths, paths.Count);
+    }
+
+    /// <summary>
+    /// 多跳推理查询
+    /// </summary>
+    public MultiHopQueryResultDto MultiHopQuery(string startId, int maxHops, IReadOnlyList<string>? relationTypes = null)
+    {
+        if (!_entities.ContainsKey(startId))
+        {
+            return new MultiHopQueryResultDto(startId, Array.Empty<ReachableEntityDto>(), 0);
+        }
+
+        var reachableEntities = new Dictionary<string, ReachableEntityDto>();
+        var visited = new Dictionary<string, int>();
+        var queue = new Queue<(string EntityId, int Depth, List<string> PathRels)>();
+
+        queue.Enqueue((startId, 0, new List<string>()));
+        visited[startId] = 0;
+
+        while (queue.Count > 0)
+        {
+            var (currentId, depth, pathRels) = queue.Dequeue();
+
+            if (depth >= maxHops)
+                continue;
+
+            var outgoingRelations = _relations.Values.Where(r => r.SourceId == currentId);
+            var incomingRelations = _relations.Values.Where(r => r.TargetId == currentId);
+
+            foreach (var rel in outgoingRelations)
+            {
+                if (relationTypes is not null && relationTypes.Count > 0 &&
+                    !relationTypes.Contains(rel.Type, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                var newDepth = depth + 1;
+                var newPathRels = new List<string>(pathRels) { rel.Type };
+
+                if (!visited.ContainsKey(rel.TargetId) || visited[rel.TargetId] > newDepth)
+                {
+                    visited[rel.TargetId] = newDepth;
+                    queue.Enqueue((rel.TargetId, newDepth, newPathRels));
+
+                    reachableEntities[rel.TargetId] = new ReachableEntityDto(
+                        ToDto(_entities[rel.TargetId]),
+                        newDepth,
+                        newPathRels);
+                }
+            }
+
+            foreach (var rel in incomingRelations)
+            {
+                if (relationTypes is not null && relationTypes.Count > 0 &&
+                    !relationTypes.Contains(rel.Type, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                var newDepth = depth + 1;
+                var newPathRels = new List<string>(pathRels) { rel.Type };
+
+                if (!visited.ContainsKey(rel.SourceId) || visited[rel.SourceId] > newDepth)
+                {
+                    visited[rel.SourceId] = newDepth;
+                    queue.Enqueue((rel.SourceId, newDepth, newPathRels));
+
+                    reachableEntities[rel.SourceId] = new ReachableEntityDto(
+                        ToDto(_entities[rel.SourceId]),
+                        newDepth,
+                        newPathRels);
+                }
+            }
+        }
+
+        var result = reachableEntities.Values.OrderBy(x => x.MinHops).ToList();
+        return new MultiHopQueryResultDto(startId, result, result.Count);
+    }
+
+    /// <summary>
+    /// 邻居查询
+    /// </summary>
+    public NeighborsQueryResultDto FindNeighbors(string entityId, string direction, int limit)
+    {
+        if (!_entities.ContainsKey(entityId))
+        {
+            return new NeighborsQueryResultDto(entityId, Array.Empty<NeighborDto>(), 0);
+        }
+
+        var neighbors = new List<NeighborDto>();
+
+        if (direction is "outgoing" or "both")
+        {
+            foreach (var rel in _relations.Values.Where(r => r.SourceId == entityId))
+            {
+                neighbors.Add(new NeighborDto(
+                    ToDto(_entities[rel.TargetId]),
+                    rel.Type,
+                    "outgoing"));
+            }
+        }
+
+        if (direction is "incoming" or "both")
+        {
+            foreach (var rel in _relations.Values.Where(r => r.TargetId == entityId))
+            {
+                neighbors.Add(new NeighborDto(
+                    ToDto(_entities[rel.SourceId]),
+                    rel.Type,
+                    "incoming"));
+            }
+        }
+
+        var limited = neighbors.Take(limit).ToList();
+        return new NeighborsQueryResultDto(entityId, limited, neighbors.Count);
+    }
+
+    /// <summary>
+    /// 聚合查询
+    /// </summary>
+    public AggregateQueryResultDto AggregateQuery(string groupBy, AggregateFilterDto? filters = null)
+    {
+        var entityList = _entities.Values.AsEnumerable();
+
+        if (filters is not null)
+        {
+            if (filters.EntityTypes is not null && filters.EntityTypes.Count > 0)
+            {
+                entityList = entityList.Where(e => filters.EntityTypes.Contains(e.Type, StringComparer.OrdinalIgnoreCase));
+            }
+            if (filters.DepartmentId.HasValue)
+            {
+                entityList = entityList.Where(e => e.DepartmentId == filters.DepartmentId.Value);
+            }
+            if (filters.IsPublic.HasValue)
+            {
+                entityList = entityList.Where(e => e.IsPublic == filters.IsPublic.Value);
+            }
+        }
+
+        List<AggregateGroupDto> groups;
+        long totalCount;
+
+        if (groupBy.Equals("type", StringComparison.OrdinalIgnoreCase))
+        {
+            var typeGroups = entityList.GroupBy(e => e.Type);
+            totalCount = entityList.LongCount();
+            groups = typeGroups.Select(g => new AggregateGroupDto(
+                g.Key,
+                g.LongCount(),
+                totalCount > 0 ? (double)g.LongCount() / totalCount * 100 : 0)).ToList();
+        }
+        else if (groupBy.Equals("department", StringComparison.OrdinalIgnoreCase))
+        {
+            var deptGroups = entityList.GroupBy(e => e.DepartmentId);
+            totalCount = entityList.LongCount();
+            groups = deptGroups.Select(g => new AggregateGroupDto(
+                _departments.GetValueOrDefault(g.Key, "未知部门"),
+                g.LongCount(),
+                totalCount > 0 ? (double)g.LongCount() / totalCount * 100 : 0)).ToList();
+        }
+        else
+        {
+            groups = new List<AggregateGroupDto>();
+            totalCount = 0;
+        }
+
+        return new AggregateQueryResultDto(groups, totalCount);
+    }
+
+    /// <summary>
+    /// 获取关系详情
+    /// </summary>
+    public RelationDetailDto? GetRelationDetail(string relationId)
+    {
+        if (!_relations.TryGetValue(relationId, out var relation))
+            return null;
+
+        return new RelationDetailDto(
+            ToRelationDto(relation),
+            ToDto(_entities[relation.SourceId]),
+            ToDto(_entities[relation.TargetId]));
+    }
+
+    /// <summary>
+    /// 更新关系
+    /// </summary>
+    public GraphRelationDto? UpdateRelation(string id, UpdateRelationRequestDto request)
+    {
+        if (!_relations.TryGetValue(id, out var relation))
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(request.Type))
+            relation.Type = request.Type;
+
+        if (request.Properties is not null)
+        {
+            relation.Properties = JsonSerializer.SerializeToNode(request.Properties) as JsonObject ?? new JsonObject();
+        }
+
+        return ToRelationDto(relation);
+    }
+
+    private GraphPathDto BuildPathDto(List<(string EntityId, string RelationId, string Direction)> path)
+    {
+        var nodes = new List<GraphEntityDto>();
+        var edges = new List<GraphRelationDto>();
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            nodes.Add(ToDto(_entities[path[i].EntityId]));
+
+            if (i < path.Count - 1)
+            {
+                var rel = _relations[path[i + 1].RelationId];
+                edges.Add(ToRelationDto(rel));
+            }
+        }
+
+        return new GraphPathDto(nodes, edges, edges.Count);
     }
 
     private void AddEntity(GraphEntityRecord entity) => _entities[entity.Id] = entity;

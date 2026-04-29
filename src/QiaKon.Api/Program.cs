@@ -74,7 +74,8 @@ builder.Services.AddNpgsqlConnectorSupport();
 // ============ LLM Services ============
 builder.Services.AddLlmTokenizer("default");
 builder.Services.AddConversationContext(maxMessages: 50, maxTokens: 8000);
-builder.Services.AddSingleton<PromptTemplate>();
+// 注：当前使用内存RAG服务，暂不注册PromptTemplate（需要模板字符串参数）
+// builder.Services.AddSingleton<PromptTemplate>();
 builder.Services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
 
 // ============ Workflow Services ============
@@ -109,7 +110,7 @@ else
 // ============ Queue Services ============
 if (isDevelopment)
 {
-    builder.Services.AddSingleton<IQueue, MemoryQueue>();
+    builder.Services.AddMemoryQueue();
 }
 else
 {
@@ -120,7 +121,8 @@ else
 }
 
 // ============ EF Core DbContext ============
-builder.Services.AddQiaKonNpgsqlDbContext<QiaKonNpgsqlDbContext>(connectionString);
+// 注：当前版本使用内存服务（MemoryDocumentService等），暂不注册EF Core DbContext
+// builder.Services.AddQiaKonNpgsqlDbContext<QiaKonNpgsqlDbContext>(connectionString);
 
 // ============ JWT Authentication ============
 var jwtSection = builder.Configuration.GetSection("Jwt");

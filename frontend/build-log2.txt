@@ -1,0 +1,13 @@
+
+> qiakon-frontend@0.1.0 build
+> tsc -b && vite build
+
+src/pages/documents/DocumentUploadPage.tsx(1,1): error TS6133: 'PageHeader' is declared but its value is never read.
+src/pages/documents/UploadPage.tsx(110,50): error TS2345: Argument of type '{ title: string; departmentId: string | undefined; visibility: "public" | "department" | "private"; accessLevel: "readonly" | "quotable"; }' is not assignable to parameter of type 'Record<string, string>'.
+  Property 'departmentId' is incompatible with index signature.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/pages/DocumentsPage.tsx(42,49): error TS2554: Expected 0-1 arguments, but got 2.
+src/pages/graphs/GraphEntityDetailPage.tsx(96,5): error TS2304: Cannot find name 'setRelations'.
+src/services/api.ts(163,30): error TS2345: Argument of type 'DocumentListParams' is not assignable to parameter of type 'Record<string, unknown>'.
+  Index signature for type 'string' is missing in type 'DocumentListParams'.

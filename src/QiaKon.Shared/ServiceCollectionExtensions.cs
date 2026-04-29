@@ -12,10 +12,24 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSharedServices(this IServiceCollection services)
     {
+        // Core services
         services.AddSingleton<IAuthService, MemoryAuthService>();
         services.AddSingleton<IDocumentService, MemoryDocumentService>();
         services.AddSingleton<IGraphService, MemoryGraphService>();
         services.AddSingleton<IRagService, MemoryRagService>();
+
+        // Dashboard & Overview
+        services.AddSingleton<IDashboardService, MemoryDashboardService>();
+        services.AddSingleton<IGraphOverviewService, MemoryGraphOverviewService>();
+
+        // System Management
+        services.AddSingleton<IDepartmentService, MemoryDepartmentService>();
+        services.AddSingleton<IRoleService, MemoryRoleService>();
+        services.AddSingleton<IUserService, MemoryUserService>();
+        services.AddSingleton<ILlmProviderService, MemoryLlmProviderService>();
+        services.AddSingleton<ISystemConfigService, MemorySystemConfigService>();
+        services.AddSingleton<IConnectorService, MemoryConnectorService>();
+        services.AddSingleton<IAuditLogService, MemoryAuditLogService>();
 
         return services;
     }

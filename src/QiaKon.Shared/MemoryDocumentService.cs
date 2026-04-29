@@ -13,6 +13,9 @@ public sealed class MemoryDocumentService : IDocumentService
 {
     private readonly Dictionary<Guid, DocumentRecord> _documents = new();
     private readonly Dictionary<Guid, DepartmentInfo> _departments = new();
+    private readonly Dictionary<Guid, List<ChunkRecord>> _chunks = new();
+    private readonly Dictionary<Guid, string> _filePaths = new();
+    private readonly Dictionary<Guid, IndexProgressRecord> _indexProgress = new();
     private readonly ILogger<MemoryDocumentService>? _logger;
 
     public MemoryDocumentService(ILogger<MemoryDocumentService>? logger = null)
@@ -52,11 +55,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Size = 4096,
                 CreatedBy = adminId,
                 CreatedAt = DateTime.UtcNow.AddDays(-30),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "系统管理员",
-                    ["tags"] = new JsonArray("架构", "设计"),
-                }
+                Metadata = new JsonObject { ["author"] = "系统管理员", ["tags"] = new JsonArray("架构", "设计") }
             },
             new DocumentRecord
             {
@@ -72,11 +71,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Size = 3584,
                 CreatedBy = engineerId,
                 CreatedAt = DateTime.UtcNow.AddDays(-20),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "工程师",
-                    ["tags"] = new JsonArray("RAG", "检索"),
-                }
+                Metadata = new JsonObject { ["author"] = "工程师", ["tags"] = new JsonArray("RAG", "检索") }
             },
             new DocumentRecord
             {
@@ -92,11 +87,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Size = 2048,
                 CreatedBy = adminId,
                 CreatedAt = DateTime.UtcNow.AddDays(-15),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "系统管理员",
-                    ["tags"] = new JsonArray("图谱", "引擎"),
-                }
+                Metadata = new JsonObject { ["author"] = "系统管理员", ["tags"] = new JsonArray("图谱", "引擎") }
             },
             new DocumentRecord
             {
@@ -112,11 +103,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Size = 5120,
                 CreatedBy = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
                 CreatedAt = DateTime.UtcNow.AddDays(-10),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "销售部",
-                    ["department"] = "销售部",
-                }
+                Metadata = new JsonObject { ["author"] = "销售部", ["department"] = "销售部" }
             },
             new DocumentRecord
             {
@@ -131,10 +118,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Size = 1536,
                 CreatedBy = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
                 CreatedAt = DateTime.UtcNow.AddDays(-5),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "人力资源部",
-                }
+                Metadata = new JsonObject { ["author"] = "人力资源部" }
             },
             new DocumentRecord
             {
@@ -144,29 +128,104 @@ public sealed class MemoryDocumentService : IDocumentService
                 Type = DocumentType.Markdown,
                 DepartmentId = deptEngineering.Id,
                 AccessLevel = AccessLevel.Department,
-                IndexStatus = IndexStatus.Completed,
+                IndexStatus = IndexStatus.Indexing,
                 Version = 3,
                 IndexVersion = 2,
                 Size = 1920,
                 CreatedBy = engineerId,
                 CreatedAt = DateTime.UtcNow.AddDays(-2),
-                Metadata = new JsonObject
-                {
-                    ["author"] = "工程师",
-                    ["tags"] = new JsonArray("管理", "制度"),
-                }
+                Metadata = new JsonObject { ["author"] = "工程师", ["tags"] = new JsonArray("管理", "制度") }
+            },
+            new DocumentRecord
+            {
+                Id = Guid.Parse("d7777777-7777-7777-7777-777777777777"),
+                Title = "市场推广方案2025",
+                Content = "2025年市场推广方案包括线上渠道扩展、线下活动策划、品牌合作等内容。重点投入数字营销领域。",
+                Type = DocumentType.Word,
+                DepartmentId = deptSales.Id,
+                AccessLevel = AccessLevel.Department,
+                IndexStatus = IndexStatus.Failed,
+                Version = 1,
+                Size = 2816,
+                CreatedBy = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                CreatedAt = DateTime.UtcNow.AddDays(-1),
+                Metadata = new JsonObject { ["author"] = "市场部" }
+            },
+            new DocumentRecord
+            {
+                Id = Guid.Parse("d8888888-8888-8888-8888-888888888888"),
+                Title = "新产品功能规划",
+                Content = "下一代产品功能规划：增强型知识推理、多模态检索、高级可视化分析、自动化工作流等核心功能。",
+                Type = DocumentType.Markdown,
+                DepartmentId = deptEngineering.Id,
+                AccessLevel = AccessLevel.Restricted,
+                IndexStatus = IndexStatus.Pending,
+                Version = 1,
+                Size = 1792,
+                CreatedBy = engineerId,
+                CreatedAt = DateTime.UtcNow.AddHours(-6),
+                Metadata = new JsonObject { ["author"] = "产品经理", ["tags"] = new JsonArray("产品", "规划") }
             },
         };
 
         foreach (var doc in seedDocs)
         {
             _documents[doc.Id] = doc;
+            _chunks[doc.Id] = GenerateSimulatedChunks(doc);
+            _indexProgress[doc.Id] = new IndexProgressRecord
+            {
+                DocumentId = doc.Id,
+                Status = doc.IndexStatus,
+                Progress = doc.IndexStatus == IndexStatus.Completed ? 100 : (doc.IndexStatus == IndexStatus.Indexing ? 50 : 0),
+                StartedAt = doc.IndexStatus == IndexStatus.Indexing ? DateTime.UtcNow.AddMinutes(-5) : null,
+                CompletedAt = doc.IndexStatus == IndexStatus.Completed ? DateTime.UtcNow.AddDays(-1) : null
+            };
         }
 
         _logger?.LogInformation("MemoryDocumentService initialized with {DocCount} documents", _documents.Count);
     }
 
-    public DocumentPagedResultDto GetDocuments(int page, int pageSize, Guid? departmentId = null, IndexStatus? status = null)
+    private static List<ChunkRecord> GenerateSimulatedChunks(DocumentRecord doc)
+    {
+        var chunks = new List<ChunkRecord>();
+        var sentences = doc.Content.Split('。', '；', '\n', '！', '？');
+        for (int i = 0; i < sentences.Length; i++)
+        {
+            var sentence = sentences[i].Trim();
+            if (string.IsNullOrWhiteSpace(sentence)) continue;
+            chunks.Add(new ChunkRecord
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = doc.Id,
+                Content = sentence.Length > 200 ? sentence.Substring(0, 200) : sentence,
+                Order = i + 1,
+                ChunkingStrategy = "RecursiveCharacterTextSplitter",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        if (chunks.Count == 0)
+        {
+            chunks.Add(new ChunkRecord
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = doc.Id,
+                Content = doc.Content.Length > 200 ? doc.Content.Substring(0, 200) : doc.Content,
+                Order = 1,
+                ChunkingStrategy = "RecursiveCharacterTextSplitter",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        return chunks;
+    }
+
+    public DocumentPagedResultDto GetDocuments(
+        int page,
+        int pageSize,
+        Guid? departmentId = null,
+        IndexStatus? status = null,
+        string? searchTitle = null,
+        string sortBy = "createdAt",
+        bool sortDescending = true)
     {
         var query = _documents.Values.AsEnumerable();
 
@@ -176,9 +235,18 @@ public sealed class MemoryDocumentService : IDocumentService
         if (status.HasValue)
             query = query.Where(d => d.IndexStatus == status.Value);
 
+        if (!string.IsNullOrWhiteSpace(searchTitle))
+            query = query.Where(d => d.Title.Contains(searchTitle, StringComparison.OrdinalIgnoreCase));
+
+        query = sortBy.ToLowerInvariant() switch
+        {
+            "title" => sortDescending ? query.OrderByDescending(d => d.Title) : query.OrderBy(d => d.Title),
+            "size" => sortDescending ? query.OrderByDescending(d => d.Size) : query.OrderBy(d => d.Size),
+            _ => sortDescending ? query.OrderByDescending(d => d.CreatedAt) : query.OrderBy(d => d.CreatedAt)
+        };
+
         var totalCount = query.LongCount();
         var items = query
-            .OrderByDescending(d => d.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(ToListItemDto)
@@ -190,6 +258,35 @@ public sealed class MemoryDocumentService : IDocumentService
     public DocumentDetailDto? GetDocument(Guid id)
     {
         return _documents.TryGetValue(id, out var doc) ? ToDetailDto(doc) : null;
+    }
+
+    public DocumentDetailWithChunksDto? GetDocumentWithChunks(Guid id)
+    {
+        if (!_documents.TryGetValue(id, out var doc))
+            return null;
+
+        var chunks = _chunks.TryGetValue(id, out var chunkList)
+            ? chunkList.Select(c => new ChunkInfoDto(c.Id, c.Order, c.Content, c.ChunkingStrategy, c.CreatedAt)).ToList()
+            : new List<ChunkInfoDto>();
+
+        return new DocumentDetailWithChunksDto(
+            doc.Id,
+            doc.Title,
+            doc.Content,
+            doc.Type,
+            doc.DepartmentId,
+            _departments.GetValueOrDefault(doc.DepartmentId)?.Name ?? "未知部门",
+            doc.AccessLevel,
+            doc.IndexStatus,
+            doc.Version,
+            doc.IndexVersion,
+            doc.Size,
+            doc.Metadata?.DeepClone() as JsonObject,
+            doc.CreatedAt,
+            doc.CreatedBy,
+            doc.ModifiedAt,
+            doc.ModifiedBy,
+            chunks);
     }
 
     public DocumentDetailDto CreateDocument(CreateDocumentRequestDto request, Guid userId)
@@ -212,6 +309,8 @@ public sealed class MemoryDocumentService : IDocumentService
         };
 
         _documents[record.Id] = record;
+        _chunks[record.Id] = GenerateSimulatedChunks(record);
+        _indexProgress[record.Id] = new IndexProgressRecord { DocumentId = record.Id, Status = IndexStatus.Pending, Progress = 0 };
         return ToDetailDto(record);
     }
 
@@ -248,6 +347,16 @@ public sealed class MemoryDocumentService : IDocumentService
             record.IndexVersion = 1;
             record.Size = file.Length;
             _documents[record.Id] = record;
+
+            if (_indexProgress.TryGetValue(record.Id, out var progress))
+            {
+                progress.Status = IndexStatus.Completed;
+                progress.Progress = 100;
+                progress.CompletedAt = DateTime.UtcNow;
+            }
+
+            var filePath = $"uploads/{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            _filePaths[record.Id] = filePath;
         }
 
         return GetDocument(created.Id)!;
@@ -274,12 +383,49 @@ public sealed class MemoryDocumentService : IDocumentService
         doc.ModifiedBy = userId;
         doc.ModifiedAt = DateTime.UtcNow;
 
+        if (_indexProgress.TryGetValue(id, out var progress))
+        {
+            progress.Status = IndexStatus.Pending;
+            progress.Progress = 0;
+            progress.StartedAt = null;
+            progress.CompletedAt = null;
+        }
+
         return ToDetailDto(doc);
     }
 
     public bool DeleteDocument(Guid id)
     {
+        _chunks.Remove(id);
+        _indexProgress.Remove(id);
+        _filePaths.Remove(id);
         return _documents.Remove(id);
+    }
+
+    public BatchDeleteResponseDto BatchDeleteDocuments(IReadOnlyList<Guid> documentIds)
+    {
+        var deletedCount = 0;
+        var failedIds = new List<Guid>();
+
+        foreach (var id in documentIds)
+        {
+            if (!DeleteDocument(id))
+                failedIds.Add(id);
+            else
+                deletedCount++;
+        }
+
+        return new BatchDeleteResponseDto(deletedCount, failedIds.Count, failedIds);
+    }
+
+    public (string FilePath, string FileName)? GetDocumentDownloadInfo(Guid id)
+    {
+        if (!_documents.TryGetValue(id, out var doc))
+            return null;
+
+        var fileName = doc.Metadata?["originalFileName"]?.GetValue<string>() ?? $"{doc.Title}.{GetExtension(doc.Type)}";
+        var filePath = _filePaths.TryGetValue(id, out var path) ? path : $"documents/{id}/{fileName}";
+        return (filePath, fileName);
     }
 
     public ReindexResponseDto Reindex(Guid? documentId)
@@ -292,6 +438,12 @@ public sealed class MemoryDocumentService : IDocumentService
             {
                 doc.IndexStatus = IndexStatus.Completed;
                 doc.IndexVersion = (doc.IndexVersion ?? 0) + 1;
+                if (_indexProgress.TryGetValue(doc.Id, out var progress))
+                {
+                    progress.Status = IndexStatus.Completed;
+                    progress.Progress = 100;
+                    progress.CompletedAt = DateTime.UtcNow;
+                }
                 count = 1;
             }
         }
@@ -301,11 +453,98 @@ public sealed class MemoryDocumentService : IDocumentService
             {
                 doc.IndexStatus = IndexStatus.Completed;
                 doc.IndexVersion = (doc.IndexVersion ?? 0) + 1;
+                if (_indexProgress.TryGetValue(doc.Id, out var progress))
+                {
+                    progress.Status = IndexStatus.Completed;
+                    progress.Progress = 100;
+                    progress.CompletedAt = DateTime.UtcNow;
+                }
                 count++;
             }
         }
 
         return new ReindexResponseDto(count, $"已重建 {count} 个文档的索引");
+    }
+
+    public IndexQueueStatusDto GetIndexQueueStatus()
+    {
+        var pending = new List<IndexQueueItemDto>();
+        var indexing = new List<IndexQueueItemDto>();
+        var failed = new List<IndexQueueItemDto>();
+        var completed = new List<IndexQueueItemDto>();
+
+        foreach (var doc in _documents.Values)
+        {
+            var progress = _indexProgress.GetValueOrDefault(doc.Id);
+            var item = new IndexQueueItemDto(
+                doc.Id,
+                doc.Title,
+                progress?.Status ?? doc.IndexStatus,
+                progress?.Progress,
+                progress?.StartedAt,
+                progress?.CompletedAt,
+                progress?.ErrorMessage);
+
+            switch (doc.IndexStatus)
+            {
+                case IndexStatus.Pending: pending.Add(item); break;
+                case IndexStatus.Indexing: indexing.Add(item); break;
+                case IndexStatus.Failed: failed.Add(item); break;
+                case IndexStatus.Completed: completed.Add(item); break;
+            }
+        }
+
+        return new IndexQueueStatusDto(pending.Count, indexing.Count, completed.Count, failed.Count, pending, indexing, failed);
+    }
+
+    public ReindexResponseDto RetryFailedIndexing()
+    {
+        var failedDocs = _documents.Values.Where(d => d.IndexStatus == IndexStatus.Failed).ToList();
+        foreach (var doc in failedDocs)
+        {
+            doc.IndexStatus = IndexStatus.Pending;
+            if (_indexProgress.TryGetValue(doc.Id, out var progress))
+            {
+                progress.Status = IndexStatus.Pending;
+                progress.Progress = 0;
+                progress.ErrorMessage = null;
+            }
+        }
+        return new ReindexResponseDto(failedDocs.Count, $"已重试 {failedDocs.Count} 个失败任务");
+    }
+
+    public IndexStatsDto GetIndexStats()
+    {
+        var totalDocs = _documents.Values.LongCount();
+        var totalChunks = _chunks.Values.Sum(c => c.Count);
+        var completedDocs = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Completed);
+        var failedDocs = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Failed);
+        var successRate = totalDocs > 0 ? (double)completedDocs / totalDocs * 100 : 0;
+        var completedToday = _documents.Values.Count(d =>
+            d.IndexStatus == IndexStatus.Completed &&
+            d.ModifiedAt >= DateTime.UtcNow.Date);
+
+        return new IndexStatsDto(totalDocs, totalChunks, Math.Round(successRate, 2), 2.5, completedToday, failedDocs);
+    }
+
+    public ReparseResponseDto ReparseDocument(Guid documentId, string? chunkingStrategy = null)
+    {
+        if (!_documents.TryGetValue(documentId, out var doc))
+            return new ReparseResponseDto(documentId, "文档不存在", 0);
+
+        var newChunks = GenerateSimulatedChunks(doc);
+        _chunks[documentId] = newChunks;
+
+        doc.IndexStatus = IndexStatus.Pending;
+        doc.IndexVersion = null;
+        if (_indexProgress.TryGetValue(documentId, out var progress))
+        {
+            progress.Status = IndexStatus.Pending;
+            progress.Progress = 0;
+            progress.ErrorMessage = null;
+        }
+
+        return new ReparseResponseDto(documentId, "文档已重新解析", newChunks.Count);
     }
 
     private DocumentListItemDto ToListItemDto(DocumentRecord doc)
@@ -366,6 +605,18 @@ public sealed class MemoryDocumentService : IDocumentService
         };
     }
 
+    private static string GetExtension(DocumentType type)
+    {
+        return type switch
+        {
+            DocumentType.Markdown => ".md",
+            DocumentType.Pdf => ".pdf",
+            DocumentType.Word => ".docx",
+            DocumentType.Html => ".html",
+            _ => ".txt"
+        };
+    }
+
     private sealed class DepartmentInfo
     {
         public Guid Id { get; set; }
@@ -389,5 +640,25 @@ public sealed class MemoryDocumentService : IDocumentService
         public DateTime CreatedAt { get; set; }
         public Guid? ModifiedBy { get; set; }
         public DateTime? ModifiedAt { get; set; }
+    }
+
+    private sealed class ChunkRecord
+    {
+        public Guid Id { get; set; }
+        public Guid DocumentId { get; set; }
+        public required string Content { get; set; }
+        public int Order { get; set; }
+        public string? ChunkingStrategy { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private sealed class IndexProgressRecord
+    {
+        public Guid DocumentId { get; set; }
+        public IndexStatus Status { get; set; }
+        public double? Progress { get; set; }
+        public DateTime? StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public string? ErrorMessage { get; set; }
     }
 }

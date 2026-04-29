@@ -146,11 +146,15 @@ export function GraphPage() {
     setQueryError('')
     setQueryLoading(true)
     try {
-      const data = await graphApi.query({
-        startEntityId: queryForm.startEntity.trim() || undefined,
-        endEntityId: queryForm.endEntity.trim() || undefined,
-        relationType: queryForm.relationType.trim() || undefined,
-        maxHops: queryForm.maxDepth ? Number(queryForm.maxDepth) : undefined,
+      if (!queryForm.startEntity.trim() || !queryForm.endEntity.trim()) {
+        setQueryError('请输入起始实体和目标实体')
+        setQueryLoading(false)
+        return
+      }
+      const data = await graphApi.queryPath({
+        sourceId: queryForm.startEntity.trim(),
+        targetId: queryForm.endEntity.trim(),
+        maxPaths: queryForm.maxDepth ? Number(queryForm.maxDepth) : 5,
       })
       setQueryPaths(data.paths)
     } catch (err) {

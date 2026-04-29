@@ -59,6 +59,13 @@ public sealed record CreateRelationRequestDto(
     Dictionary<string, object?>? Properties);
 
 /// <summary>
+/// 更新关系请求
+/// </summary>
+public sealed record UpdateRelationRequestDto(
+    string? Type,
+    Dictionary<string, object?>? Properties);
+
+/// <summary>
 /// 实体详情（含邻居）
 /// </summary>
 public sealed record EntityDetailDto(
@@ -120,3 +127,102 @@ public sealed record GraphQueryRequestDto(
 /// </summary>
 public sealed record GraphQueryResponseDto(
     IReadOnlyList<GraphPathDto> Paths);
+
+/// <summary>
+/// 路径查询请求
+/// </summary>
+public sealed record PathQueryRequestDto(
+    string SourceEntityId,
+    string TargetEntityId,
+    int MaxPaths = 5,
+    int MaxHops = 5);
+
+/// <summary>
+/// 路径查询结果
+/// </summary>
+public sealed record PathQueryResultDto(
+    IReadOnlyList<GraphPathDto> Paths,
+    int TotalPaths);
+
+/// <summary>
+/// 多跳推理请求
+/// </summary>
+public sealed record MultiHopQueryRequestDto(
+    string StartEntityId,
+    int MaxHops = 3,
+    IReadOnlyList<string>? RelationTypes = null);
+
+/// <summary>
+/// 多跳推理结果
+/// </summary>
+public sealed record MultiHopQueryResultDto(
+    string StartEntityId,
+    IReadOnlyList<ReachableEntityDto> ReachableEntities,
+    int TotalCount);
+
+/// <summary>
+/// 可达实体
+/// </summary>
+public sealed record ReachableEntityDto(
+    GraphEntityDto Entity,
+    int MinHops,
+    IReadOnlyList<string> PathRelations);
+
+/// <summary>
+/// 邻居查询请求
+/// </summary>
+public sealed record NeighborsQueryRequestDto(
+    string EntityId,
+    string Direction = "both",
+    int Limit = 50);
+
+/// <summary>
+/// 聚合查询请求
+/// </summary>
+public sealed record AggregateQueryRequestDto(
+    string GroupBy,
+    AggregateFilterDto? Filters = null);
+
+/// <summary>
+/// 聚合查询过滤器
+/// </summary>
+public sealed record AggregateFilterDto(
+    IReadOnlyList<string>? EntityTypes = null,
+    IReadOnlyList<string>? RelationTypes = null,
+    Guid? DepartmentId = null,
+    bool? IsPublic = null);
+
+/// <summary>
+/// 聚合查询结果
+/// </summary>
+public sealed record AggregateQueryResultDto(
+    IReadOnlyList<AggregateGroupDto> Groups,
+    long TotalCount);
+
+/// <summary>
+/// 聚合分组
+/// </summary>
+public sealed record AggregateGroupDto(
+    string Key,
+    long Count,
+    double Percentage);
+
+/// <summary>
+/// 关系详情（含源和目标信息）
+/// </summary>
+public sealed record RelationDetailDto(
+    GraphRelationDto Relation,
+    GraphEntityDto SourceEntity,
+    GraphEntityDto TargetEntity);
+
+/// <summary>
+/// 实体类型分布
+/// </summary>
+public sealed record EntityTypeDistributionDto(
+    IReadOnlyDictionary<string, long> Distribution);
+
+/// <summary>
+/// 关系类型分布
+/// </summary>
+public sealed record RelationTypeDistributionDto(
+    IReadOnlyDictionary<string, long> Distribution);

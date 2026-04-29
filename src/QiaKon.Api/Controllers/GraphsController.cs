@@ -75,7 +75,7 @@ public class GraphsController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         var offset = (page - 1) * pageSize;
-        var result = ((MemoryGraphService)_graphService).GetEntitiesFiltered(name, type, departmentId, isPublic, offset, pageSize);
+        var result = _graphService.GetEntitiesFiltered(name, type, departmentId, isPublic, offset, pageSize);
         return ApiResponse<EntityPagedResultDto>.Ok(result);
     }
 
@@ -142,7 +142,7 @@ public class GraphsController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         var offset = (page - 1) * pageSize;
-        var result = ((MemoryGraphService)_graphService).GetRelationsFiltered(type, sourceEntityId, targetEntityId, offset, pageSize);
+        var result = _graphService.GetRelationsFiltered(type, sourceEntityId, targetEntityId, offset, pageSize);
         return ApiResponse<RelationListResultDto>.Ok(result);
     }
 

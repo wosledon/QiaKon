@@ -124,6 +124,11 @@ public interface IGraphService
     EntityPagedResultDto GetEntities(string? label, int offset, int limit);
 
     /// <summary>
+    /// 获取实体列表（支持筛选）
+    /// </summary>
+    EntityPagedResultDto GetEntitiesFiltered(string? name, string? type, Guid? departmentId, bool? isPublic, int offset, int limit);
+
+    /// <summary>
     /// 获取实体详情
     /// </summary>
     EntityDetailDto? GetEntity(string id);
@@ -147,6 +152,11 @@ public interface IGraphService
     /// 获取关系列表
     /// </summary>
     RelationListResultDto GetRelations(int offset, int limit, string? type = null);
+
+    /// <summary>
+    /// 获取关系列表（支持筛选）
+    /// </summary>
+    RelationListResultDto GetRelationsFiltered(string? type, string? sourceEntityId, string? targetEntityId, int offset, int limit);
 
     /// <summary>
     /// 获取关系详情

@@ -53,8 +53,8 @@ var connectionString = builder.Configuration.GetConnectionString("Default") ?? "
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
 var isDevelopment = builder.Environment.IsDevelopment();
 
-// ============ Shared Services (Memory-based) ============
-builder.Services.AddSharedServices();
+// ============ Shared Services (PostgreSQL-backed core business data) ============
+builder.Services.AddSharedServicesWithPostgres(connectionString);
 
 // ============ Cache Services ============
 if (isDevelopment)
@@ -120,10 +120,6 @@ else
     });
 }
 
-// ============ EF Core DbContext ============
-// 注：当前版本使用内存服务（MemoryDocumentService等），暂不注册EF Core DbContext
-// builder.Services.AddQiaKonNpgsqlDbContext<QiaKonNpgsqlDbContext>(connectionString);
-
 // ============ JWT Authentication ============
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var secretKey = jwtSection["SecretKey"] ?? "QiaKon-Dev-Secret-Key-For-Development-Only-Min-32-Chars!";
@@ -162,6 +158,8 @@ builder.Services.AddHealthChecks()
     .AddRedis(redisConnectionString, name: "redis", tags: new[] { "cache" });
 
 var app = builder.Build();
+
+await app.Services.InitializeQiaKonDatabaseAsync();
 
 // Middleware pipeline
 app.UseExceptionHandling();

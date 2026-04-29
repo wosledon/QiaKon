@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\QiaKon.Contracts\QiaKon.Contracts.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.EntityFrameworkCore.Npgsql\QiaKon.EntityFrameworkCore.Npgsql.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,13 +5,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using QiaKon.Api.Middleware;
 using QiaKon.Cache;
-using QiaKon.Cache.Hybrid;
-using QiaKon.Cache.Memory;
+using QiaKon.Cache.Redis;
 using QiaKon.Connector;
 using QiaKon.Connector.Http;
 using QiaKon.Connector.Npgsql;
 using QiaKon.EntityFrameworkCore.Npgsql;
-using QiaKon.Graph.Engine.Memory;
+using QiaKon.Graph.Engine;
 using QiaKon.Graph.Engine.Npgsql;
 using QiaKon.Llm;
 using QiaKon.Llm.Context;
@@ -56,16 +55,8 @@ var isDevelopment = builder.Environment.IsDevelopment();
 // ============ Shared Services (PostgreSQL-backed core business data) ============
 builder.Services.AddSharedServicesWithPostgres(connectionString);
 
-// ============ Cache Services ============
-if (isDevelopment)
-{
-    builder.Services.AddMemoryCache();
-    builder.Services.AddSingleton<ICache, MemoryCache>();
-}
-else
-{
-    builder.Services.AddHybridCache(redisConnectionString);
-}
+// ============ Cache Services (Redis only, no in-memory fallback) ============
+builder.Services.AddQiaKonRedisCache(redisConnectionString);
 
 // ============ Connector Services ============
 builder.Services.AddHttpConnectorSupport();
@@ -94,18 +85,11 @@ builder.Services.AddNpgsqlVectorStore(options =>
 });
 builder.Services.AddMarkItDownDocumentProcessor();
 
-// ============ Graph Engine Services ============
-if (isDevelopment)
+// ============ Graph Engine Services (PostgreSQL only, no in-memory fallback) ============
+builder.Services.AddNpgsqlGraphEngine(options =>
 {
-    builder.Services.AddMemoryGraphEngine();
-}
-else
-{
-    builder.Services.AddNpgsqlGraphEngine(options =>
-    {
-        options.ConnectionString = connectionString;
-    });
-}
+    options.ConnectionString = connectionString;
+});
 
 // ============ Queue Services ============
 if (isDevelopment)
@@ -160,6 +144,7 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 await app.Services.InitializeQiaKonDatabaseAsync();
+await InitializeInfrastructureAsync(app.Services);
 
 // Middleware pipeline
 app.UseExceptionHandling();
@@ -180,3 +165,13 @@ app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();
+
+static async Task InitializeInfrastructureAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+{
+    using var scope = serviceProvider.CreateScope();
+    var graphEngine = scope.ServiceProvider.GetService<IGraphEngine>();
+    if (graphEngine is not null)
+    {
+        await graphEngine.InitializeAsync(cancellationToken);
+    }
+}

@@ -616,3 +616,27 @@ export interface WorkflowExecutionInput {
   input: Record<string, unknown>
   startedAt: string
 }
+
+// === Graph Preview Types ===
+export interface GraphPreviewNode {
+  id: string
+  name: string
+  type: string
+  departmentName?: string
+  isPublic?: boolean
+  degree?: number
+}
+
+export interface GraphPreviewEdge {
+  id: string
+  sourceId: string
+  targetId: string
+  type: string
+}
+
+export interface GraphPreviewData {
+  nodes: GraphPreviewNode[]
+  edges: GraphPreviewEdge[]
+  totalNodeCount?: number
+  totalEdgeCount?: number
+}

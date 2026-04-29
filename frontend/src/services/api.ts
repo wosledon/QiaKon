@@ -18,6 +18,7 @@ import type {
   DocumentDetail,
   DocumentListParams,
   EmbeddingModel,
+  GraphPreviewData,
   IndexQueueItem,
   IndexStats,
   GraphAggregateResponse,
@@ -248,6 +249,7 @@ function buildQuery(params: Record<string, unknown>): string {
 
 export const graphApi = {
   overview: () => apiGet<GraphOverview>('/graphs'),
+  preview: () => apiGet<GraphPreviewData>('/graphs/preview?limit=24'),
   entityTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/entity-types'),
   relationTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/relation-types'),
 

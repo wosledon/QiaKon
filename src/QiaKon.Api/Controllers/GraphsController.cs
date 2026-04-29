@@ -28,6 +28,19 @@ public class GraphsController : ControllerBase
     }
 
     /// <summary>
+    /// 获取图谱预览数据（用于可视化概览）
+    /// </summary>
+    /// <param name="limit">最大节点数，默认100</param>
+    [HttpGet("preview")]
+    public ApiResponse<GraphPreviewResultDto> GetPreview([FromQuery] int limit = 100)
+    {
+        if (limit <= 0) limit = 100;
+        if (limit > 1000) limit = 1000; // 防止过大
+        var result = _graphService.GetPreview(limit);
+        return ApiResponse<GraphPreviewResultDto>.Ok(result);
+    }
+
+    /// <summary>
     /// 获取实体类型分布
     /// </summary>
     [HttpGet("stats/entity-types")]

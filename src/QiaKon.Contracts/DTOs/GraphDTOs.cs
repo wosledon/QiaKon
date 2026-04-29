@@ -226,3 +226,36 @@ public sealed record EntityTypeDistributionDto(
 /// </summary>
 public sealed record RelationTypeDistributionDto(
     IReadOnlyDictionary<string, long> Distribution);
+
+#region Graph Preview DTOs
+
+/// <summary>
+/// 图谱预览节点（适用于可视化）
+/// </summary>
+public sealed record GraphPreviewNodeDto(
+    string Id,
+    string Name,
+    string Type,
+    string DepartmentName,
+    bool IsPublic,
+    int Degree);
+
+/// <summary>
+/// 图谱预览边（适用于可视化）
+/// </summary>
+public sealed record GraphPreviewEdgeDto(
+    string Id,
+    string SourceId,
+    string TargetId,
+    string Type);
+
+/// <summary>
+/// 图谱预览结果
+/// </summary>
+public sealed record GraphPreviewResultDto(
+    IReadOnlyList<GraphPreviewNodeDto> Nodes,
+    IReadOnlyList<GraphPreviewEdgeDto> Edges,
+    long TotalNodeCount,
+    long TotalEdgeCount);
+
+#endregion

@@ -192,6 +192,11 @@ public interface IGraphService
     /// 聚合查询
     /// </summary>
     AggregateQueryResultDto AggregateQuery(string groupBy, AggregateFilterDto? filters = null);
+
+    /// <summary>
+    /// 获取图谱预览数据（用于可视化概览）
+    /// </summary>
+    GraphPreviewResultDto GetPreview(int limit = 100);
 }
 
 /// <summary>

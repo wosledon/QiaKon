@@ -629,4 +629,50 @@ public sealed class MemoryGraphService : IGraphService
         public Guid CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
     }
+
+    /// <summary>
+    /// 获取图谱预览数据（用于可视化概览）
+    /// </summary>
+    public GraphPreviewResultDto GetPreview(int limit = 100)
+    {
+        // 计算每个实体的度数（连接数）
+        var entityDegrees = new Dictionary<string, int>();
+        foreach (var entity in _entities.Keys)
+        {
+            entityDegrees[entity] = _relations.Values.Count(r => r.SourceId == entity || r.TargetId == entity);
+        }
+
+        // 获取前 limit 个度数最高的实体
+        var topEntities = _entities.Values
+            .OrderByDescending(e => entityDegrees.GetValueOrDefault(e.Id, 0))
+            .Take(limit)
+            .ToList();
+
+        var topEntityIds = new HashSet<string>(topEntities.Select(e => e.Id));
+
+        // 仅返回预览节点之间的边，避免前端拿到指向不可见节点的悬空边
+        var relevantRelations = _relations.Values
+            .Where(r => topEntityIds.Contains(r.SourceId) && topEntityIds.Contains(r.TargetId))
+            .ToList();
+
+        // 构建节点列表
+        var nodes = topEntities.Select(e => new GraphPreviewNodeDto(
+            e.Id,
+            e.Name,
+            e.Type,
+            _departments.GetValueOrDefault(e.DepartmentId, "未知部门"),
+            e.IsPublic,
+            entityDegrees.GetValueOrDefault(e.Id, 0)
+        )).ToList();
+
+        // 构建边列表
+        var edges = relevantRelations.Select(r => new GraphPreviewEdgeDto(
+            r.Id,
+            r.SourceId,
+            r.TargetId,
+            r.Type
+        )).ToList();
+
+        return new GraphPreviewResultDto(nodes, edges, _entities.Count, _relations.Count);
+    }
 }

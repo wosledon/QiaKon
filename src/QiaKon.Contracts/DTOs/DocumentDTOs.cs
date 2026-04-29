@@ -1,6 +1,7 @@
 namespace QiaKon.Contracts.DTOs;
 
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 /// <summary>
 /// 文档列表项DTO
@@ -68,7 +69,8 @@ public sealed record UploadDocumentFormDto(
     string? Title,
     string? Description,
     Guid? DepartmentId,
-    AccessLevel? AccessLevel);
+    AccessLevel? AccessLevel,
+    string? Visibility);
 
 /// <summary>
 /// 文档分页列表响应
@@ -135,7 +137,8 @@ public sealed record IndexQueueItemDto(
     double? Progress,
     DateTime? StartedAt,
     DateTime? CompletedAt,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    DateTime? CreatedAt);
 
 /// <summary>
 /// 索引队列状态响应
@@ -147,7 +150,15 @@ public sealed record IndexQueueStatusDto(
     int FailedCount,
     IReadOnlyList<IndexQueueItemDto> PendingItems,
     IReadOnlyList<IndexQueueItemDto> IndexingItems,
+    IReadOnlyList<IndexQueueItemDto> CompletedItems,
     IReadOnlyList<IndexQueueItemDto> FailedItems);
+
+/// <summary>
+/// 索引队列扁平响应（供前端使用）
+/// </summary>
+public sealed record IndexQueueResponseDto(
+    IReadOnlyList<IndexQueueItemDto> Items,
+    int TotalCount);
 
 /// <summary>
 /// 索引统计响应
@@ -156,9 +167,13 @@ public sealed record IndexStatsDto(
     long TotalDocuments,
     long TotalChunks,
     double SuccessRate,
-    double AverageDurationSeconds,
+    [property: JsonPropertyName("avgDuration")] double AverageDurationSeconds,
     long CompletedToday,
-    long FailedToday);
+    long FailedToday,
+    long PendingCount,
+    long IndexingCount,
+    long CompletedCount,
+    long FailedCount);
 
 /// <summary>
 /// 重新解析请求

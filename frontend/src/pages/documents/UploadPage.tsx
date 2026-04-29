@@ -58,21 +58,17 @@ function isValidFile(file: File): { valid: boolean; error?: string } {
 }
 
 const DEPARTMENT_OPTIONS = [
-  { value: 'dept-tech', label: '技术部' },
-  { value: 'dept-product', label: '产品部' },
-  { value: 'dept-ops', label: '运营部' },
-  { value: 'dept-hr', label: '人力资源' },
-]
-
-const VISIBILITY_OPTIONS = [
-  { value: 'public', label: '公开' },
-  { value: 'department', label: '部门内' },
-  { value: 'private', label: '私有' },
+  { value: '11111111-1111-1111-1111-111111111111', label: '研发部' },
+  { value: '22222222-2222-2222-2222-222222222222', label: '销售部' },
+  { value: '33333333-3333-3333-3333-333333333333', label: '人力资源部' },
+  { value: '44444444-4444-4444-4444-444444444444', label: '行政部' },
 ]
 
 const ACCESS_LEVEL_OPTIONS = [
-  { value: 'readonly', label: '只读' },
-  { value: 'quotable', label: '可引用' },
+  { value: 'Public', label: '公开' },
+  { value: 'Department', label: '部门内' },
+  { value: 'Restricted', label: '受限' },
+  { value: 'Confidential', label: '机密' },
 ]
 
 const FILE_TYPE_TAGS = ['PDF', 'DOCX', 'MD', 'TXT']
@@ -90,9 +86,9 @@ export function UploadPage() {
 
   // Metadata
   const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
   const [departmentId, setDepartmentId] = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'department' | 'private'>('department')
-  const [accessLevel, setAccessLevel] = useState<'readonly' | 'quotable'>('readonly')
+  const [accessLevel, setAccessLevel] = useState<'Public' | 'Department' | 'Restricted' | 'Confidential'>('Department')
 
   const handleFile = useCallback(
     (selectedFile: File) => {
@@ -150,10 +146,10 @@ export function UploadPage() {
     try {
       const metadata: Record<string, string> = {
         title: title || file.name.replace(/\.[^/.]+$/, ''),
-        visibility,
-        accessLevel,
+        accessLevel: accessLevel as string,
       }
       if (departmentId) metadata.departmentId = departmentId
+      if (description) metadata.description = description
       const doc = await documentApi.upload(file, metadata)
       setUploadedDocId(doc.id)
       setProgress(100)
@@ -406,26 +402,29 @@ export function UploadPage() {
                 options={DEPARTMENT_OPTIONS}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select
-                  label="公开范围"
-                  value={visibility}
-                  onChange={(e) =>
-                    setVisibility(
-                      e.target.value as 'public' | 'department' | 'private'
-                    )
-                  }
-                  options={VISIBILITY_OPTIONS}
-                />
-                <Select
-                  label="访问级别"
-                  value={accessLevel}
-                  onChange={(e) =>
-                    setAccessLevel(e.target.value as 'readonly' | 'quotable')
-                  }
-                  options={ACCESS_LEVEL_OPTIONS}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  描述
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="输入文档描述（可选）"
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
+
+              <Select
+                label="访问级别"
+                value={accessLevel}
+                onChange={(e) =>
+                  setAccessLevel(
+                    e.target.value as 'Public' | 'Department' | 'Restricted' | 'Confidential'
+                  )
+                }
+                options={ACCESS_LEVEL_OPTIONS}
+              />
             </CardContent>
 
             <CardFooter className="bg-gray-50/50">

@@ -44,7 +44,7 @@ public class DocumentIndexController : ControllerBase
     /// <summary>
     /// 全量重建索引
     /// </summary>
-    [HttpPost("rebuild")]
+    [HttpPost("rebuild-all")]
     public ApiResponse<ReindexResponseDto> RebuildAll()
     {
         var result = _documentService.Reindex(null);
@@ -55,7 +55,7 @@ public class DocumentIndexController : ControllerBase
     /// <summary>
     /// 获取索引统计（总块数、成功率、平均耗时）
     /// </summary>
-    [HttpGet("stats")]
+    [HttpGet("overview")]
     public ApiResponse<IndexStatsDto> GetStats()
     {
         var stats = _documentService.GetIndexStats();

@@ -85,7 +85,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
     let code: string | undefined
     try {
       const body = await response.json()
-      message = body.message || body.error || `请求失败 (${response.status})`
+      const validationMessage = body.errors && typeof body.errors === 'object'
+        ? Object.entries(body.errors)
+            .flatMap(([field, errors]) => {
+              if (!Array.isArray(errors)) return []
+              return errors.map((item) => `${field}: ${String(item)}`)
+            })
+            .join('；')
+        : ''
+
+      message =
+        body.message
+        || body.error
+        || body.title
+        || validationMessage
+        || `请求失败 (${response.status})`
       code = body.code
     } catch {
       /* ignore */

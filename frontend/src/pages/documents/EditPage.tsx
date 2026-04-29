@@ -20,8 +20,7 @@ export function EditPage() {
   // Form state
   const [title, setTitle] = useState('')
   const [departmentId, setDepartmentId] = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'department' | 'private'>('department')
-  const [accessLevel, setAccessLevel] = useState<'readonly' | 'quotable'>('readonly')
+  const [accessLevel, setAccessLevel] = useState<string>('department')
 
   const loadDoc = useCallback(async () => {
     if (!id) return
@@ -32,8 +31,7 @@ export function EditPage() {
       setDoc(data)
       setTitle(data.title)
       setDepartmentId(data.departmentId)
-      setVisibility((data.visibility as 'public' | 'department' | 'private') || 'department')
-      setAccessLevel((data.accessLevel as 'readonly' | 'quotable') || 'readonly')
+      setAccessLevel(data.accessLevel || 'department')
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -56,8 +54,6 @@ export function EditPage() {
     try {
       await documentApi.update(id, {
         title: title.trim(),
-        departmentId: departmentId || undefined,
-        visibility,
         accessLevel,
       })
       setSaved(true)
@@ -148,44 +144,32 @@ export function EditPage() {
             <select
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">请选择部门</option>
-              <option value="dept-tech">技术部</option>
-              <option value="dept-product">产品部</option>
-              <option value="dept-ops">运营部</option>
-              <option value="dept-hr">人力资源</option>
+              <option value="11111111-1111-1111-1111-111111111111">研发部</option>
+              <option value="22222222-2222-2222-2222-222222222222">销售部</option>
+              <option value="33333333-3333-3333-3333-333333333333">人力资源部</option>
+              <option value="44444444-4444-4444-4444-444444444444">行政部</option>
             </select>
+            <p className="text-xs text-gray-400 mt-1">部门信息暂不支持修改</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                公开范围
-              </label>
-              <select
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as 'public' | 'department' | 'private')}
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="public">公开</option>
-                <option value="department">部门内</option>
-                <option value="private">私有</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                访问级别
-              </label>
-              <select
-                value={accessLevel}
-                onChange={(e) => setAccessLevel(e.target.value as 'readonly' | 'quotable')}
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="readonly">只读</option>
-                <option value="quotable">可引用</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              访问级别
+            </label>
+            <select
+              value={accessLevel}
+              onChange={(e) => setAccessLevel(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="public">公开</option>
+              <option value="department">部门内</option>
+              <option value="restricted">受限</option>
+              <option value="confidential">机密</option>
+            </select>
           </div>
         </CardContent>
       </Card>

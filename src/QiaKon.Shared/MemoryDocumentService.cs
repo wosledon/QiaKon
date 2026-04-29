@@ -329,7 +329,22 @@ public sealed class MemoryDocumentService : IDocumentService
             ["originalFileName"] = file.FileName,
             ["contentType"] = file.ContentType,
             ["description"] = form.Description,
+            ["visibility"] = form.Visibility,
         };
+
+        // Resolve AccessLevel: prefer explicit AccessLevel, fallback to Visibility mapping
+        var accessLevel = form.AccessLevel;
+        if (!accessLevel.HasValue && !string.IsNullOrWhiteSpace(form.Visibility))
+        {
+            accessLevel = form.Visibility.ToLowerInvariant() switch
+            {
+                "public" => AccessLevel.Public,
+                "department" => AccessLevel.Department,
+                "private" => AccessLevel.Restricted,
+                _ => AccessLevel.Department
+            };
+        }
+        accessLevel ??= AccessLevel.Department;
 
         var created = CreateDocument(
             new CreateDocumentRequestDto(
@@ -337,7 +352,7 @@ public sealed class MemoryDocumentService : IDocumentService
                 Content: content,
                 Type: GetDocumentType(file.FileName),
                 DepartmentId: form.DepartmentId ?? Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                AccessLevel: form.AccessLevel ?? AccessLevel.Department,
+                AccessLevel: accessLevel.Value,
                 Metadata: metadata),
             userId);
 
@@ -480,10 +495,11 @@ public sealed class MemoryDocumentService : IDocumentService
                 doc.Id,
                 doc.Title,
                 progress?.Status ?? doc.IndexStatus,
-                progress?.Progress,
+                progress?.Progress ?? 0,
                 progress?.StartedAt,
                 progress?.CompletedAt,
-                progress?.ErrorMessage);
+                progress?.ErrorMessage,
+                doc.CreatedAt);
 
             switch (doc.IndexStatus)
             {
@@ -494,7 +510,29 @@ public sealed class MemoryDocumentService : IDocumentService
             }
         }
 
-        return new IndexQueueStatusDto(pending.Count, indexing.Count, completed.Count, failed.Count, pending, indexing, failed);
+        return new IndexQueueStatusDto(pending.Count, indexing.Count, completed.Count, failed.Count, pending, indexing, completed, failed);
+    }
+
+    public IndexQueueResponseDto GetAllIndexQueueItems()
+    {
+        var allItems = new List<IndexQueueItemDto>();
+
+        foreach (var doc in _documents.Values)
+        {
+            var progress = _indexProgress.GetValueOrDefault(doc.Id);
+            var item = new IndexQueueItemDto(
+                doc.Id,
+                doc.Title,
+                progress?.Status ?? doc.IndexStatus,
+                progress?.Progress ?? 0,
+                progress?.StartedAt,
+                progress?.CompletedAt,
+                progress?.ErrorMessage,
+                doc.CreatedAt);
+            allItems.Add(item);
+        }
+
+        return new IndexQueueResponseDto(allItems, allItems.Count);
     }
 
     public ReindexResponseDto RetryFailedIndexing()
@@ -519,12 +557,24 @@ public sealed class MemoryDocumentService : IDocumentService
         var totalChunks = _chunks.Values.Sum(c => c.Count);
         var completedDocs = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Completed);
         var failedDocs = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Failed);
-        var successRate = totalDocs > 0 ? (double)completedDocs / totalDocs * 100 : 0;
+        var pendingCount = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Pending);
+        var indexingCount = _documents.Values.Count(d => d.IndexStatus == IndexStatus.Indexing);
+        var successRate = totalDocs > 0 ? (double)completedDocs / totalDocs : 0;
         var completedToday = _documents.Values.Count(d =>
             d.IndexStatus == IndexStatus.Completed &&
             d.ModifiedAt >= DateTime.UtcNow.Date);
 
-        return new IndexStatsDto(totalDocs, totalChunks, Math.Round(successRate, 2), 2.5, completedToday, failedDocs);
+        return new IndexStatsDto(
+            totalDocs,
+            totalChunks,
+            Math.Round(successRate, 2),
+            2.5,
+            completedToday,
+            failedDocs,
+            pendingCount,
+            indexingCount,
+            completedDocs,
+            failedDocs);
     }
 
     public ReparseResponseDto ReparseDocument(Guid documentId, string? chunkingStrategy = null)

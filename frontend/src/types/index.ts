@@ -163,7 +163,6 @@ export interface Document {
   updatedAt?: string
   size: number
   metadata?: Record<string, unknown>
-  visibility?: 'public' | 'department' | 'private'
   content?: string
   chunks?: DocumentChunk[]
 }
@@ -198,9 +197,9 @@ export interface DocumentListParams {
 
 export interface DocumentUploadMetadata {
   title?: string
+  description?: string
   departmentId?: string
-  visibility?: 'public' | 'department' | 'private'
-  accessLevel?: 'readonly' | 'quotable'
+  accessLevel?: 'Public' | 'Department' | 'Restricted' | 'Confidential'
 }
 
 export interface IndexQueueItem {
@@ -596,6 +595,19 @@ export interface WorkflowExecutionDetail {
   totalDurationMs: number
   output?: Record<string, unknown> | null
   error?: string | null
+}
+
+// === Workflow Orchestration Types ===
+export interface WorkflowStepConfig {
+  name: string
+  type: 'llm' | 'retrieval' | 'graph' | 'transform' | 'condition' | 'custom'
+  config?: Record<string, unknown>
+}
+
+export interface WorkflowStageConfig {
+  name: string
+  mode: 'sequential' | 'parallel' | 'fallback'
+  steps: WorkflowStepConfig[]
 }
 
 export interface WorkflowExecutionInput {

@@ -115,6 +115,7 @@ public class DocumentsController : ControllerBase
     /// 批量删除文档
     /// </summary>
     [HttpPost("batch")]
+    [HttpPost("batch-delete")]
     public ApiResponse<BatchDeleteResponseDto> BatchDelete([FromBody] BatchDeleteRequestDto request)
     {
         if (request.DocumentIds is null || request.DocumentIds.Count == 0)
@@ -175,10 +176,10 @@ public class DocumentsController : ControllerBase
     /// 获取索引队列状态
     /// </summary>
     [HttpGet("index/queue")]
-    public ApiResponse<IndexQueueStatusDto> GetIndexQueue()
+    public ApiResponse<IReadOnlyList<IndexQueueItemDto>> GetIndexQueue()
     {
-        var status = _documentService.GetIndexQueueStatus();
-        return ApiResponse<IndexQueueStatusDto>.Ok(status);
+        var queue = _documentService.GetAllIndexQueueItems();
+        return ApiResponse<IReadOnlyList<IndexQueueItemDto>>.Ok(queue.Items);
     }
 
     /// <summary>

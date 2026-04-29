@@ -7,6 +7,7 @@ namespace QiaKon.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("api/workflows")]
 public class WorkflowController : ControllerBase
 {
     private readonly IWorkflowExecutor _workflowExecutor;
@@ -288,7 +289,14 @@ public class WorkflowController : ControllerBase
                 {
                     Name = s.Name,
                     Mode = s.Mode.ToString(),
-                    StepCount = s.Steps.Count
+                    StepCount = s.Steps.Count,
+                    Enabled = true,
+                    Config = null,
+                    Steps = s.Steps.Select(st => new StepInfo
+                    {
+                        Name = st.Name,
+                        Enabled = true
+                    }).ToList()
                 }).ToList(),
                 IsSystem = true,
                 CreatedAt = DateTime.UtcNow
@@ -319,6 +327,30 @@ public class WorkflowController : ControllerBase
         existing.Description = request.Description ?? existing.Description;
         if (request.Config != null)
             existing.Config = request.Config;
+
+        // 更新阶段配置
+        if (request.Stages != null)
+        {
+            existing.Stages = request.Stages.Select(sc => new StageInfo
+            {
+                Name = sc.Name,
+                Mode = sc.Mode,
+                StepCount = sc.Steps?.Count ?? 0,
+                Enabled = sc.Enabled,
+                TimeoutSeconds = sc.TimeoutSeconds,
+                RetryCount = sc.RetryCount,
+                Config = sc.Config,
+                Steps = sc.Steps?.Select(st => new StepInfo
+                {
+                    Name = st.Name,
+                    Enabled = st.Enabled,
+                    TimeoutSeconds = st.TimeoutSeconds,
+                    RetryCount = st.RetryCount,
+                    Config = st.Config
+                }).ToList()
+            }).ToList();
+        }
+
         existing.UpdatedAt = DateTime.UtcNow;
 
         return ApiResponse<PipelineDefinition>.Ok(existing, "工作流更新成功");
@@ -402,9 +434,45 @@ public class WorkflowController : ControllerBase
     }
 }
 
-public record CreatePipelineRequest(string Name, string? Description = null, Dictionary<string, object?>? Config = null);
-public record UpdatePipelineRequest(string? Name = null, string? Description = null, Dictionary<string, object?>? Config = null);
+public record CreatePipelineRequest(
+    string Name,
+    string? Description = null,
+    Dictionary<string, object?>? Config = null,
+    List<StageConfig>? Stages = null);
+
+public record UpdatePipelineRequest(
+    string? Name = null,
+    string? Description = null,
+    Dictionary<string, object?>? Config = null,
+    List<StageConfig>? Stages = null);
+
 public record ExecuteWorkflowRequest(Dictionary<string, object?>? Input = null);
+
+/// <summary>
+/// 步骤配置
+/// </summary>
+public class StepConfig
+{
+    public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public int? TimeoutSeconds { get; set; }
+    public int? RetryCount { get; set; }
+    public Dictionary<string, object?>? Config { get; set; }
+}
+
+/// <summary>
+/// 阶段配置
+/// </summary>
+public class StageConfig
+{
+    public string Name { get; set; } = string.Empty;
+    public string Mode { get; set; } = "Sequential";
+    public bool Enabled { get; set; } = true;
+    public int? TimeoutSeconds { get; set; }
+    public int? RetryCount { get; set; }
+    public Dictionary<string, object?>? Config { get; set; }
+    public List<StepConfig>? Steps { get; set; }
+}
 
 public class PipelineDefinition
 {
@@ -424,6 +492,23 @@ public class StageInfo
     public string Name { get; set; } = string.Empty;
     public string Mode { get; set; } = string.Empty;
     public int StepCount { get; set; }
+    public bool Enabled { get; set; } = true;
+    public int? TimeoutSeconds { get; set; }
+    public int? RetryCount { get; set; }
+    public Dictionary<string, object?>? Config { get; set; }
+    public List<StepInfo>? Steps { get; set; }
+}
+
+/// <summary>
+/// 步骤信息
+/// </summary>
+public class StepInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public int? TimeoutSeconds { get; set; }
+    public int? RetryCount { get; set; }
+    public Dictionary<string, object?>? Config { get; set; }
 }
 
 public class ExecutionInput

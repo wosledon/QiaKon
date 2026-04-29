@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Dialog } from '@/components/ui/Dialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { GitBranch, Clock, Trash2, RefreshCw, Plus } from 'lucide-react'
+import { GitBranch, Clock, Trash2, RefreshCw, Plus, Settings2 } from 'lucide-react'
 import { workflowApi } from '@/services/api'
 import type { WorkflowDefinition } from '@/types'
 
@@ -69,7 +69,7 @@ export function WorkflowsPage() {
       })
       setCreateOpen(false)
       setCreateForm({ name: '', description: '' })
-      navigate(`/workflows/${created.id}`)
+      navigate(`/workflows/${created.id}?tab=orchestrate`)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '创建失败')
     } finally {
@@ -134,6 +134,19 @@ export function WorkflowsPage() {
                       <>
                         <StatusBadge status={getStatusBadge(wf.stageCount)} />
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-gray-500 hover:text-purple-600 px-2"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/workflows/${wf.id}?tab=orchestrate`)
+                            }}
+                            title="编排工作流"
+                          >
+                            <Settings2 className="w-4 h-4 mr-1" />
+                            编排
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

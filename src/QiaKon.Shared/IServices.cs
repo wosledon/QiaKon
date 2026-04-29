@@ -93,6 +93,11 @@ public interface IDocumentService
     IndexQueueStatusDto GetIndexQueueStatus();
 
     /// <summary>
+    /// 获取全部索引队列项（供扁平列表展示）
+    /// </summary>
+    IndexQueueResponseDto GetAllIndexQueueItems();
+
+    /// <summary>
     /// 批量重试失败任务
     /// </summary>
     ReindexResponseDto RetryFailedIndexing();

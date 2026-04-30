@@ -331,15 +331,93 @@ export const dashboardApi = {
 }
 
 // LLM Models API
+
+/** 后端返回的模型 DTO 格式 */
+interface BackendLlmModel {
+  id: string
+  providerId: string
+  name: string
+  actualModelName: string
+  modelType: string
+  vectorDimensions?: number
+  maxTokens?: number
+  isEnabled: boolean
+  isDefault: boolean
+}
+
+/** 后端返回的供应商 DTO 格式 */
+interface BackendLlmProvider {
+  id: string
+  name: string
+  type: string
+  baseUrl: string
+  apiKey?: string
+  timeout?: number
+  retryCount?: number
+  hasModels: boolean
+  models: BackendLlmModel[]
+}
+
+/** 将后端 LlmModelDto 映射为前端 LlmModel */
+function toFrontendModel(m: BackendLlmModel): LlmModel {
+  return {
+    id: m.id,
+    providerId: m.providerId,
+    name: m.name,
+    type: m.modelType.toLowerCase() === 'inference' ? 'inference' : 'embedding',
+    modelName: m.actualModelName,
+    dimension: m.vectorDimensions,
+    maxTokens: m.maxTokens,
+    isDefault: m.isDefault,
+    isEnabled: m.isEnabled,
+  }
+}
+
+/** 将后端 LlmProviderDto 映射为前端 LlmProvider */
+function toFrontendProvider(p: BackendLlmProvider): LlmProvider {
+  return {
+    id: p.id,
+    name: p.name,
+    type: p.type as LlmProvider['type'],
+    baseUrl: p.baseUrl,
+    apiKey: p.apiKey,
+    timeout: p.timeout,
+    retryCount: p.retryCount,
+    modelCount: p.models.length,
+    models: p.models.map(toFrontendModel),
+  }
+}
+
 export const llmModelsApi = {
-  providers: () => apiGet<LlmProvider[]>('/admin/llm-models/providers'),
+  providers: () =>
+    apiGet<BackendLlmProvider[]>('/admin/llm-models/providers').then(list => list.map(toFrontendProvider)),
   addProvider: (data: ProviderFormData) => apiPost<LlmProvider>('/admin/llm-models/providers', data),
   updateProvider: (id: string, data: ProviderFormData) => apiPut<LlmProvider>(`/admin/llm-models/providers/${id}`, data),
   deleteProvider: (id: string) => apiDelete<void>(`/admin/llm-models/providers/${id}`),
   testProvider: (id: string) => apiPost<{ success: boolean; message?: string }>(`/admin/llm-models/providers/${id}/test`, {}),
-  providerModels: (id: string) => apiGet<LlmModel[]>(`/admin/llm-models/providers/${id}/models`),
-  addModel: (data: ModelFormData & { providerId: string }) => apiPost<LlmModel>('/admin/llm-models/models', data),
-  updateModel: (id: string, data: Partial<ModelFormData>) => apiPut<LlmModel>(`/admin/llm-models/models/${id}`, data),
+  providerModels: (id: string) =>
+    apiGet<BackendLlmModel[]>(`/admin/llm-models/providers/${id}/models`).then(list => list.map(toFrontendModel)),
+  addModel: (data: ModelFormData & { providerId: string }) => {
+    const body = {
+      providerId: data.providerId,
+      name: data.name,
+      actualModelName: data.modelName,
+      modelType: data.type === 'inference' ? 'Inference' : 'Embedding',
+      vectorDimensions: data.dimension,
+      maxTokens: data.maxTokens,
+      setAsDefault: data.isDefault ?? false,
+    }
+    return apiPost<BackendLlmModel>('/admin/llm-models/models', body).then(toFrontendModel)
+  },
+  updateModel: (id: string, data: Partial<ModelFormData>) => {
+    const body: Record<string, unknown> = {}
+    if (data.name !== undefined) body.name = data.name
+    if (data.modelName !== undefined) body.actualModelName = data.modelName
+    if (data.dimension !== undefined) body.vectorDimensions = data.dimension
+    if (data.maxTokens !== undefined) body.maxTokens = data.maxTokens
+    if (data.isDefault !== undefined) body.setAsDefault = data.isDefault
+    return apiPut<BackendLlmModel>(`/admin/llm-models/models/${id}`, body).then(toFrontendModel)
+  },
   deleteModel: (id: string) => apiDelete<void>(`/admin/llm-models/models/${id}`),
   setDefaultModel: (id: string) => apiPut<void>(`/admin/llm-models/models/${id}/set-default`, {}),
   toggleModel: (id: string) => apiPut<void>(`/admin/llm-models/models/${id}/toggle`, {}),

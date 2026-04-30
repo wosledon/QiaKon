@@ -364,7 +364,7 @@ public sealed class MemoryConnectorService : IConnectorService
     {
         _logger = logger;
         _httpClientFactory = httpClientFactory;
-        _defaultConnectionString = configuration.GetConnectionString("Default") ?? "Host=127.0.0.1;Port=5243;Database=QiaKon;Username=admin;Password=admin@123";
+        _defaultConnectionString = configuration.GetConnectionString("Default") ?? "Host=127.0.0.1;Port=5432;Database=QiaKon;Username=admin;Password=admin@123";
         _redisConnectionString = configuration.GetConnectionString("Redis") ?? "127.0.0.1:6379,password=admin@123";
         InitializeSeedData();
     }

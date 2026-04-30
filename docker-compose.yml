@@ -8,7 +8,7 @@ version: '3.8'
 
 services:
   # PostgreSQL 数据库（带 pgvector 扩展）
-  # 本地环境: 127.0.0.1:5243 admin/admin@123
+  # 本地环境: 127.0.0.1:5432 admin/admin@123
   postgres:
     image: pgvector/pgvector:pg16
     container_name: qiakon-postgres
@@ -17,7 +17,7 @@ services:
       POSTGRES_PASSWORD: admin@123
       POSTGRES_DB: postgres
     ports:
-      - "5243:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     profiles:

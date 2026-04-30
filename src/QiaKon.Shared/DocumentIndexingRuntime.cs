@@ -140,11 +140,20 @@ internal sealed class DocumentIndexingRuntime
 
     public async Task MarkFailedAsync(DocumentRow document, Exception ex, CancellationToken cancellationToken = default)
     {
-        document.IndexStatus = IndexStatus.Failed;
-        document.IndexProgress = 0;
-        document.IndexCompletedAt = null;
-        document.IndexErrorMessage = ex.Message;
-        document.ModifiedAt = DateTime.UtcNow;
+        _dbContext.ChangeTracker.Clear();
+
+        var persistedDocument = await _dbContext.Documents.FirstOrDefaultAsync(d => d.Id == document.Id, cancellationToken);
+        if (persistedDocument is null)
+        {
+            _logger?.LogWarning("标记索引失败状态时未找到文档: {DocumentId}", document.Id);
+            return;
+        }
+
+        persistedDocument.IndexStatus = IndexStatus.Failed;
+        persistedDocument.IndexProgress = 0;
+        persistedDocument.IndexCompletedAt = null;
+        persistedDocument.IndexErrorMessage = ex.Message;
+        persistedDocument.ModifiedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

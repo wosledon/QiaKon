@@ -144,7 +144,7 @@ internal sealed class PostgresDocumentService : IDocumentService
         }
         catch (Exception ex)
         {
-            _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+            TryMarkIndexFailed(document, ex);
             _logger?.LogError(ex, "创建文档后索引失败: {DocumentId}", document.Id);
         }
 
@@ -206,7 +206,7 @@ internal sealed class PostgresDocumentService : IDocumentService
         }
         catch (Exception ex)
         {
-            await _indexingRuntime.MarkFailedAsync(document, ex, cancellationToken);
+            await TryMarkIndexFailedAsync(document, ex, cancellationToken);
             _logger?.LogError(ex, "上传文档后索引失败: {DocumentId} ({Title})", document.Id, document.Title);
         }
 
@@ -336,7 +336,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             }
             catch (Exception ex)
             {
-                _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+                TryMarkIndexFailed(document, ex);
                 failedCount++;
                 _logger?.LogError(ex, "重建索引失败: {DocumentId}", document.Id);
             }
@@ -393,7 +393,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             }
             catch (Exception ex)
             {
-                _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+                TryMarkIndexFailed(document, ex);
                 _logger?.LogError(ex, "重试失败文档索引时再次失败: {DocumentId}", document.Id);
             }
         }
@@ -448,9 +448,33 @@ internal sealed class PostgresDocumentService : IDocumentService
         }
         catch (Exception ex)
         {
-            _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+            TryMarkIndexFailed(document, ex);
             _logger?.LogError(ex, "文档重新解析失败: {DocumentId}", documentId);
             return new ReparseResponseDto(documentId, $"文档重新解析失败: {ex.Message}", 0);
+        }
+    }
+
+    private void TryMarkIndexFailed(DocumentRow document, Exception ex)
+    {
+        try
+        {
+            _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+        }
+        catch (Exception markFailedEx)
+        {
+            _logger?.LogError(markFailedEx, "记录索引失败状态时出错: {DocumentId}", document.Id);
+        }
+    }
+
+    private async Task TryMarkIndexFailedAsync(DocumentRow document, Exception ex, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _indexingRuntime.MarkFailedAsync(document, ex, cancellationToken);
+        }
+        catch (Exception markFailedEx)
+        {
+            _logger?.LogError(markFailedEx, "记录索引失败状态时出错: {DocumentId}", document.Id);
         }
     }
 

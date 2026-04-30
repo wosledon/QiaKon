@@ -55,18 +55,20 @@ internal sealed class DocumentGraphProjectionService
             BuildChunkGraph(document, now, documentEntityId, chunkRows.Take(8).ToList(), entities, relations);
         }
 
+        _dbContext.GraphEntities.AddRange(entities);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         if (relations.Count > 0)
         {
             _dbContext.GraphRelations.AddRange(relations);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
-
-        _dbContext.GraphEntities.AddRange(entities);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteDocumentGraphAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
         var prefix = GetDocumentPrefix(documentId);
+        var documentEntityId = GetDocumentEntityId(documentId);
 
         var relations = await _dbContext.GraphRelations
             .Where(x => EF.Functions.Like(x.Id, prefix + "%"))
@@ -77,7 +79,7 @@ internal sealed class DocumentGraphProjectionService
         }
 
         var entities = await _dbContext.GraphEntities
-            .Where(x => EF.Functions.Like(x.Id, prefix + "%"))
+            .Where(x => x.Id == documentEntityId || EF.Functions.Like(x.Id, prefix + "%"))
             .ToListAsync(cancellationToken);
         if (entities.Count > 0)
         {

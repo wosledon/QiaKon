@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Dialog } from '@/components/ui/Dialog'
@@ -275,8 +277,10 @@ export function DetailPage() {
         <Card>
           <CardContent className="py-5">
             {doc.content ? (
-              <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                {doc.content}
+              <div className="markdown-body max-w-none text-gray-700">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {doc.content}
+                </ReactMarkdown>
               </div>
             ) : (
               <div className="text-center py-12 text-gray-400">

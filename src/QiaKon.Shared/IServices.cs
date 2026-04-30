@@ -225,6 +225,11 @@ public interface IRagService
     RagChatResponseDto Chat(RagChatRequestDto request);
 
     /// <summary>
+    /// 流式RAG问答
+    /// </summary>
+    IAsyncEnumerable<RagChatStreamEventDto> StreamChat(RagChatRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 获取对话历史列表
     /// </summary>
     IReadOnlyList<ConversationHistoryDto> GetConversationHistory(int offset, int limit, Guid? userId = null);

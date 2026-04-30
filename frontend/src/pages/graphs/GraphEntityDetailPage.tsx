@@ -3,11 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardContent } from '@/components/ui/Card'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { EntityEditModal } from '@/components/graphs/EntityEditModal'
 import { graphApi } from '@/services/api'
 import type { GraphEntity, GraphRelation } from '@/types'
-import { ArrowLeft, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText } from 'lucide-react'
 
 interface RelationGroup {
   type: string
@@ -38,26 +36,28 @@ export function GraphEntityDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-
   useEffect(() => {
     if (!id) return
     const load = async () => {
       setIsLoading(true)
       setError('')
       try {
-        const [entityData, relationData, neighborData] = await Promise.all([
+        const [entityData, outgoingRelations, incomingRelations, neighborData] = await Promise.all([
           graphApi.entity(id),
-          graphApi.relations({ sourceId: id, targetId: id, pageSize: 1000 }),
+          graphApi.relations({ sourceId: id, pageSize: 1000 }),
+          graphApi.relations({ targetId: id, pageSize: 1000 }),
           graphApi.queryNeighbors({ entityId: id, direction: 'both' }),
         ])
         setEntity(entityData)
 
+        const relationData = [
+          ...outgoingRelations.items,
+          ...incomingRelations.items.filter((relation) => !outgoingRelations.items.some((existing) => existing.id === relation.id)),
+        ]
+
         // Group relations by type
         const groups: Record<string, RelationGroup> = {}
-        relationData.items.forEach((r) => {
+        relationData.forEach((r) => {
           if (!groups[r.type]) {
             groups[r.type] = { type: r.type, count: 0, relations: [] }
           }
@@ -76,35 +76,12 @@ export function GraphEntityDetailPage() {
     load()
   }, [id])
 
-  const handleDeleteConfirm = async () => {
-    if (!id) return
-    setDeleteLoading(true)
-    try {
-      await graphApi.deleteEntity(id)
-      navigate('/graphs/entities')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败')
-      setDeleteLoading(false)
-      setConfirmOpen(false)
-    }
-  }
-
-  const handleRefresh = () => {
-    if (!id) return
-    // reload by re-triggering effect
-    setEntity(null)
-    setRelationGroups([])
-    setNeighbors([])
-    setError('')
-    setIsLoading(true)
-    graphApi.entity(id).then((entityData) => {
-      setEntity(entityData)
-      setIsLoading(false)
-    }).catch((err) => {
-      setError(err instanceof Error ? err.message : '加载失败')
-      setIsLoading(false)
-    })
-  }
+  const sourceDocumentId = typeof entity?.properties?.sourceDocumentId === 'string'
+    ? entity.properties.sourceDocumentId
+    : undefined
+  const sourceDocumentTitle = typeof entity?.properties?.sourceDocumentTitle === 'string'
+    ? entity.properties.sourceDocumentTitle
+    : undefined
 
   if (isLoading) {
     return (
@@ -142,22 +119,15 @@ export function GraphEntityDetailPage() {
         </Button>
       </div>
 
-      <PageHeader title={entity.name} description={`类型: ${entity.type}`}>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>
-            <Edit className="w-4 h-4 mr-1" />
-            编辑
-          </Button>
-          <Button variant="danger" size="sm" onClick={() => setConfirmOpen(true)}>
-            <Trash2 className="w-4 h-4 mr-1" />
-            删除
-          </Button>
-        </div>
-      </PageHeader>
+      <PageHeader title={entity.name} description={`类型: ${entity.type}`} />
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
       )}
+
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        当前实体以文档自动生成结果为主，页面提供来源追溯与关系浏览，不再作为手工编辑入口。
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -190,6 +160,16 @@ export function GraphEntityDetailPage() {
                   {formatJson(entity.properties)}
                 </pre>
               </div>
+              {sourceDocumentId && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-sm font-medium text-gray-900">来源文档</p>
+                  <p className="mt-1 text-sm text-gray-500">{sourceDocumentTitle || sourceDocumentId}</p>
+                  <Button variant="secondary" size="sm" className="mt-3" onClick={() => navigate(`/documents/${sourceDocumentId}`)}>
+                    <FileText className="mr-1 h-4 w-4" />
+                    查看来源文档
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -254,22 +234,6 @@ export function GraphEntityDetailPage() {
           </Card>
         </div>
       </div>
-
-      <EntityEditModal
-        open={modalOpen}
-        entity={entity}
-        onClose={() => setModalOpen(false)}
-        onSuccess={handleRefresh}
-      />
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="删除实体"
-        message={`确定要删除实体 "${entity.name}" 吗？此操作不可恢复。`}
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setConfirmOpen(false)}
-        isLoading={deleteLoading}
-      />
     </div>
   )
 }

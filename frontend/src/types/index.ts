@@ -133,6 +133,7 @@ export interface ChatRequest {
   query: string
   conversationId?: string
   modelId?: string
+  enableThinking?: boolean
   retrievalOptions?: Record<string, unknown>
 }
 
@@ -143,12 +144,40 @@ export interface ChatResponseData {
   turns: number
 }
 
+export interface ChatStreamChunkData {
+  delta: string
+}
+
 export interface Source {
   documentId: string
   title: string
   text: string
   snippet: string
   score: number
+}
+
+export interface ConversationMessage {
+  id: string
+  role: 'user' | 'assistant' | string
+  content: string
+  createdAt: string
+  sources?: Source[]
+}
+
+export interface ConversationHistoryDto {
+  id: string
+  title: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConversationDetailDto {
+  id: string
+  title: string
+  messages: ConversationMessage[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Document {
@@ -526,23 +555,6 @@ export interface PasswordChangeData {
   currentPassword: string
   newPassword: string
   confirmPassword: string
-}
-
-// === RAG History Types ===
-export interface ConversationHistoryDto {
-  id: string
-  title: string
-  messageCount: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ConversationDetailDto {
-  id: string
-  title: string
-  messages: { id: string; role: string; content: string; createdAt: string; sources?: unknown[] }[]
-  createdAt: string
-  updatedAt: string
 }
 
 // === Workflow Types ===

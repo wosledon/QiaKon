@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http.Features;
 using QiaKon.Contracts.DTOs;
 using QiaKon.Shared;
 using System.Text.Json;
@@ -74,27 +75,48 @@ public class ChatController : ControllerBase
     {
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Append("X-Accel-Buffering", "no");
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
         try
         {
-            var result = _ragService.Chat(request);
-
-            var payload = JsonSerializer.Serialize(new
+            if (!request.ModelId.HasValue
+                && request.ConversationId.HasValue
+                && _conversationModels.TryGetValue(request.ConversationId.Value, out var selectedModelId))
             {
-                response = result.Response,
-                sources = result.Sources,
-                conversationId = result.ConversationId,
-                turns = result.Turns,
-            });
+                request = request with { ModelId = selectedModelId };
+            }
 
-            await Response.WriteAsync($"data: {payload}\n\n");
-            await Response.WriteAsync("event: done\ndata: [DONE]\n\n");
-            await Response.Body.FlushAsync();
+            await foreach (var evt in _ragService.StreamChat(request, HttpContext.RequestAborted))
+            {
+                if (string.Equals(evt.Type, "chunk", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteSseEventAsync("chunk", new { delta = evt.Delta });
+                }
+                else if (string.Equals(evt.Type, "done", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteSseEventAsync("done", new
+                    {
+                        response = evt.Response,
+                        sources = evt.Sources,
+                        conversationId = evt.ConversationId,
+                        turns = evt.Turns,
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "流式问答失败");
-            await Response.WriteAsync($"event: error\ndata: {JsonSerializer.Serialize(new { message = ex.Message })}\n\n");
+            await WriteSseEventAsync("error", new { message = ex.Message });
+        }
+
+        async Task WriteSseEventAsync(string eventName, object payload)
+        {
+            var json = JsonSerializer.Serialize(payload);
+            await Response.WriteAsync($"event: {eventName}\n");
+            await Response.WriteAsync($"data: {json}\n\n");
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
     }
 

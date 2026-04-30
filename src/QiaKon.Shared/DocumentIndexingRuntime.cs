@@ -25,6 +25,7 @@ internal sealed class DocumentIndexingRuntime
     private readonly IMoEChunkingStrategyFactory _moeChunkingStrategyFactory;
     private readonly ILlmClientFactory _llmClientFactory;
     private readonly ConfiguredLlmModelResolver _modelResolver;
+    private readonly DocumentGraphProjectionService _documentGraphProjectionService;
     private readonly ILogger<DocumentIndexingRuntime>? _logger;
     private readonly CharacterChunkingStrategy _characterChunkingStrategy = new();
 
@@ -37,6 +38,7 @@ internal sealed class DocumentIndexingRuntime
         IMoEChunkingStrategyFactory moeChunkingStrategyFactory,
         ILlmClientFactory llmClientFactory,
         ConfiguredLlmModelResolver modelResolver,
+        DocumentGraphProjectionService documentGraphProjectionService,
         ILogger<DocumentIndexingRuntime>? logger = null)
     {
         _dbContext = dbContext;
@@ -47,6 +49,7 @@ internal sealed class DocumentIndexingRuntime
         _moeChunkingStrategyFactory = moeChunkingStrategyFactory;
         _llmClientFactory = llmClientFactory;
         _modelResolver = modelResolver;
+        _documentGraphProjectionService = documentGraphProjectionService;
         _logger = logger;
     }
 
@@ -61,6 +64,8 @@ internal sealed class DocumentIndexingRuntime
         document.IndexCompletedAt = null;
         document.IndexErrorMessage = null;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _documentGraphProjectionService.DeleteDocumentGraphAsync(document.Id, cancellationToken);
 
         var existingChunkIds = await _dbContext.DocumentChunks
             .Where(c => c.DocumentId == document.Id)
@@ -100,6 +105,7 @@ internal sealed class DocumentIndexingRuntime
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await UpsertVectorsAsync(document, chunks, resolvedStrategy, cancellationToken);
+        await _documentGraphProjectionService.SyncDocumentAsync(document, chunkRows, cancellationToken);
 
         document.IndexStatus = IndexStatus.Completed;
         document.IndexVersion = (document.IndexVersion ?? 0) + 1;
@@ -114,6 +120,8 @@ internal sealed class DocumentIndexingRuntime
 
     public async Task DeleteDocumentIndexAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
+        await _documentGraphProjectionService.DeleteDocumentGraphAsync(documentId, cancellationToken);
+
         var chunkIds = await _dbContext.DocumentChunks
             .Where(c => c.DocumentId == documentId)
             .Select(c => c.Id)

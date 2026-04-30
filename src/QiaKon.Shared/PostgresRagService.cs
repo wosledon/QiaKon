@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QiaKon.Contracts.DTOs;
@@ -88,39 +90,10 @@ internal sealed class PostgresRagService : IRagService
         }
         else
         {
-            var modelSelection = request.ModelId.HasValue
-                ? _modelResolver.TryGetInferenceModel(request.ModelId.Value)
-                : _modelResolver.TryGetDefaultInferenceModel();
-
-            if (modelSelection is null)
-            {
-                throw new InvalidOperationException("未找到已启用的默认推理模型，请先在大模型管理中启用并设为默认。当前对话链路已切换为真实推理，不再使用模板回答。");
-            }
-
-            var llmRequest = new ChatCompletionRequest
-            {
-                Model = modelSelection.Model.ActualModelName,
-                Messages =
-                [
-                    ChatMessage.System("你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。"),
-                    ChatMessage.User(BuildRagPrompt(request.Query, retrieved.Results))
-                ],
-                InferenceOptions = new LlmInferenceOptions
-                {
-                    Temperature = 0.2,
-                    MaxTokens = Math.Min(modelSelection.Model.MaxTokens ?? 4096, 4096)
-                }
-            };
-
-            responseText = ExecuteCompletion(modelSelection, llmRequest);
-            sources = retrieved.Results
-                .Select(result => new RagSourceDto(
-                    result.DocumentId,
-                    result.DocumentTitle,
-                    result.Text,
-                    result.Score,
-                    TruncateText(result.Text, 120)))
-                .ToList();
+            var modelSelection = ResolveInferenceModel(request);
+            var llmRequest = BuildCompletionRequest(modelSelection, request.Query, retrieved.Results, request.EnableThinking);
+            responseText = NormalizeAssistantResponse(ExecuteCompletion(modelSelection, llmRequest), request.EnableThinking);
+            sources = BuildSources(retrieved.Results);
         }
 
         var assistantMessage = new ConversationMessageRow
@@ -143,6 +116,103 @@ internal sealed class PostgresRagService : IRagService
         _dbContext.SaveChanges();
 
         return new RagChatResponseDto(responseText, sources, conversationId, CountTurns(session.Id));
+    }
+
+    public async IAsyncEnumerable<RagChatStreamEventDto> StreamChat(
+        RagChatRequestDto request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var conversationId = request.ConversationId ?? Guid.NewGuid();
+        var retrieved = Retrieve(new RetrieveRequestDto(request.Query, request.TopK));
+        var session = GetOrCreateSession(conversationId, request.Query);
+
+        var userMessage = new ConversationMessageRow
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = session.Id,
+            Role = "user",
+            Content = request.Query,
+            SourcesJson = null,
+            CreatedAt = DateTime.UtcNow
+        };
+        _dbContext.ConversationMessages.Add(userMessage);
+        session.UpdatedAt = userMessage.CreatedAt;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        string responseText;
+        IReadOnlyList<RagSourceDto> sources;
+
+        if (retrieved.Results.Count == 0)
+        {
+            responseText = "我没有从当前知识库中检索到足够相关的内容，建议先确认文档已完成解析、分块和索引。";
+            sources = Array.Empty<RagSourceDto>();
+            yield return new RagChatStreamEventDto("chunk", Delta: responseText);
+        }
+        else
+        {
+            var modelSelection = ResolveInferenceModel(request);
+            var llmRequest = BuildCompletionRequest(modelSelection, request.Query, retrieved.Results, request.EnableThinking);
+            var rawResponseBuilder = new StringBuilder();
+            var emittedVisibleLength = 0;
+
+            await foreach (var delta in ExecuteCompletionStream(modelSelection, llmRequest, cancellationToken))
+            {
+                if (string.IsNullOrWhiteSpace(delta))
+                {
+                    continue;
+                }
+
+                rawResponseBuilder.Append(delta);
+
+                var visibleResponse = NormalizeAssistantResponse(rawResponseBuilder.ToString(), request.EnableThinking, streaming: true);
+                if (visibleResponse.Length <= emittedVisibleLength)
+                {
+                    continue;
+                }
+
+                var visibleDelta = visibleResponse[emittedVisibleLength..];
+                emittedVisibleLength = visibleResponse.Length;
+
+                if (!string.IsNullOrWhiteSpace(visibleDelta))
+                {
+                    yield return new RagChatStreamEventDto("chunk", Delta: visibleDelta);
+                }
+            }
+
+            responseText = NormalizeAssistantResponse(rawResponseBuilder.ToString(), request.EnableThinking);
+            if (string.IsNullOrWhiteSpace(responseText))
+            {
+                throw new InvalidOperationException($"模型 {modelSelection.Model.Name} 返回了空响应。");
+            }
+
+            sources = BuildSources(retrieved.Results);
+        }
+
+        var assistantMessage = new ConversationMessageRow
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = session.Id,
+            Role = "assistant",
+            Content = responseText,
+            SourcesJson = PostgresPersistenceJson.Serialize(sources),
+            CreatedAt = DateTime.UtcNow
+        };
+        _dbContext.ConversationMessages.Add(assistantMessage);
+
+        if (string.IsNullOrWhiteSpace(session.Title))
+        {
+            session.Title = TruncateText(request.Query, 24);
+        }
+
+        session.UpdatedAt = assistantMessage.CreatedAt;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        yield return new RagChatStreamEventDto(
+            "done",
+            Response: responseText,
+            Sources: sources,
+            ConversationId: conversationId,
+            Turns: CountTurns(session.Id));
     }
 
     public IReadOnlyList<ConversationHistoryDto> GetConversationHistory(int offset, int limit, Guid? userId = null)
@@ -246,6 +316,50 @@ internal sealed class PostgresRagService : IRagService
         return session;
     }
 
+    private ConfiguredLlmModelSelection ResolveInferenceModel(RagChatRequestDto request)
+    {
+        var modelSelection = request.ModelId.HasValue
+            ? _modelResolver.TryGetInferenceModel(request.ModelId.Value)
+            : _modelResolver.TryGetDefaultInferenceModel();
+
+        if (modelSelection is null)
+        {
+            throw new InvalidOperationException("未找到已启用的默认推理模型，请先在大模型管理中启用并设为默认。当前对话链路已切换为真实推理，不再使用模板回答。");
+        }
+
+        return modelSelection;
+    }
+
+    private ChatCompletionRequest BuildCompletionRequest(
+        ConfiguredLlmModelSelection modelSelection,
+        string query,
+        IReadOnlyList<RetrieveResultItemDto> results,
+        bool enableThinking)
+        => new()
+        {
+            Model = modelSelection.Model.ActualModelName,
+            Messages =
+            [
+                ChatMessage.System(BuildSystemPrompt(enableThinking)),
+                ChatMessage.User(BuildRagPrompt(query, results, enableThinking))
+            ],
+            InferenceOptions = new LlmInferenceOptions
+            {
+                Temperature = 0.2,
+                MaxTokens = Math.Min(modelSelection.Model.MaxTokens ?? 4096, 4096)
+            }
+        };
+
+    private static IReadOnlyList<RagSourceDto> BuildSources(IReadOnlyList<RetrieveResultItemDto> results)
+        => results
+            .Select(result => new RagSourceDto(
+                result.DocumentId,
+                result.DocumentTitle,
+                result.Text,
+                result.Score,
+                TruncateText(result.Text, 120)))
+            .ToList();
+
     private string ExecuteCompletion(ConfiguredLlmModelSelection modelSelection, ChatCompletionRequest llmRequest)
     {
         var options = _modelResolver.BuildOptions(modelSelection);
@@ -268,7 +382,36 @@ internal sealed class PostgresRagService : IRagService
         }
     }
 
-    private static string BuildRagPrompt(string query, IReadOnlyList<RetrieveResultItemDto> results)
+    private async IAsyncEnumerable<string> ExecuteCompletionStream(
+        ConfiguredLlmModelSelection modelSelection,
+        ChatCompletionRequest llmRequest,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var options = _modelResolver.BuildOptions(modelSelection);
+        var client = _llmClientFactory.CreateClient(options);
+
+        try
+        {
+            await foreach (var chunk in client.CompleteStreamAsync(llmRequest, cancellationToken))
+            {
+                if (!string.IsNullOrWhiteSpace(chunk.Content))
+                {
+                    yield return chunk.Content;
+                }
+            }
+        }
+        finally
+        {
+            await client.DisposeAsync();
+        }
+    }
+
+    private static string BuildSystemPrompt(bool enableThinking)
+        => enableThinking
+            ? "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。你可以先使用 <think>...</think> 标签输出思考过程，但最终给用户的正式答案必须写在标签之外。"
+            : "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。不要输出任何 <think> 标签、思考过程、推理链或内部分析，只输出最终回答。";
+
+    private static string BuildRagPrompt(string query, IReadOnlyList<RetrieveResultItemDto> results, bool enableThinking)
     {
         var sb = new StringBuilder();
         sb.AppendLine("以下是从知识库检索到的相关片段，请基于它们回答用户问题。");
@@ -285,8 +428,84 @@ internal sealed class PostgresRagService : IRagService
         }
 
         sb.AppendLine($"用户问题：{query}");
-        sb.AppendLine("请输出结构化、准确、可追溯的中文回答，并优先引用上面的来源信息。");
+        if (enableThinking)
+        {
+            sb.AppendLine("请先在 <think>...</think> 中输出你的分析过程，再在标签外给出结构化、准确、可追溯的中文最终答案，并优先引用上面的来源信息。");
+        }
+        else
+        {
+            sb.AppendLine("请直接输出结构化、准确、可追溯的中文回答，并优先引用上面的来源信息。不要输出任何 <think> 标签或思考过程。");
+        }
+
         return sb.ToString();
+    }
+
+    private static string NormalizeAssistantResponse(string text, bool enableThinking, bool streaming = false)
+    {
+        var normalized = enableThinking ? text : StripThinkBlocks(text);
+        if (streaming)
+        {
+            return normalized;
+        }
+
+        return normalized.Trim();
+    }
+
+    private static string StripThinkBlocks(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var visible = new StringBuilder();
+        var cursor = 0;
+
+        while (cursor < text.Length)
+        {
+            var openIndex = text.IndexOf("<think>", cursor, StringComparison.OrdinalIgnoreCase);
+            if (openIndex < 0)
+            {
+                visible.Append(text[cursor..]);
+                break;
+            }
+
+            visible.Append(text[cursor..openIndex]);
+
+            var closeIndex = text.IndexOf("</think>", openIndex + 7, StringComparison.OrdinalIgnoreCase);
+            if (closeIndex < 0)
+            {
+                break;
+            }
+
+            cursor = closeIndex + 8;
+        }
+
+        var result = Regex.Replace(visible.ToString(), "</?think>", string.Empty, RegexOptions.IgnoreCase);
+        return TrimIncompleteThinkTagSuffix(result);
+    }
+
+    private static string TrimIncompleteThinkTagSuffix(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var partialTags = new[] { "<think>", "</think>" };
+        foreach (var tag in partialTags)
+        {
+            for (var length = tag.Length - 1; length > 0; length--)
+            {
+                var suffix = tag[..length];
+                if (text.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return text[..^length];
+                }
+            }
+        }
+
+        return text;
     }
 
     private ChatMessageDto ToChatMessageDto(ConversationMessageRow row)

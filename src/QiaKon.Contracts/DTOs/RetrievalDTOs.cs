@@ -36,7 +36,8 @@ public sealed record RagChatRequestDto(
     string Query,
     Guid? ConversationId = null,
     int TopK = 5,
-    Guid? ModelId = null);
+    Guid? ModelId = null,
+    bool EnableThinking = false);
 
 /// <summary>
 /// RAG问答来源
@@ -56,6 +57,17 @@ public sealed record RagChatResponseDto(
     IReadOnlyList<RagSourceDto> Sources,
     Guid ConversationId,
     int Turns);
+
+/// <summary>
+/// RAG流式问答事件
+/// </summary>
+public sealed record RagChatStreamEventDto(
+    string Type,
+    string? Delta = null,
+    string? Response = null,
+    IReadOnlyList<RagSourceDto>? Sources = null,
+    Guid? ConversationId = null,
+    int? Turns = null);
 
 /// <summary>
 /// 文档重建索引请求

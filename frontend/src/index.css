@@ -3,3 +3,116 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
 }
+
+@layer components {
+  .markdown-body {
+    color: rgb(31 41 55);
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-body > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4 {
+    color: rgb(17 24 39);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .markdown-body h1 {
+    font-size: 1.125rem;
+  }
+
+  .markdown-body h2 {
+    font-size: 1rem;
+  }
+
+  .markdown-body h3,
+  .markdown-body h4 {
+    font-size: 0.9375rem;
+  }
+
+  .markdown-body p,
+  .markdown-body li,
+  .markdown-body blockquote {
+    font-size: 0.875rem;
+  }
+
+  .markdown-body ul,
+  .markdown-body ol {
+    padding-left: 1.25rem;
+  }
+
+  .markdown-body ul {
+    list-style: disc;
+  }
+
+  .markdown-body ol {
+    list-style: decimal;
+  }
+
+  .markdown-body blockquote {
+    border-left: 3px solid rgb(191 219 254);
+    padding-left: 0.75rem;
+    color: rgb(75 85 99);
+  }
+
+  .markdown-body code {
+    border-radius: 0.375rem;
+    background: rgb(243 244 246);
+    padding: 0.125rem 0.375rem;
+    font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+  }
+
+  .markdown-body pre {
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    background: rgb(17 24 39);
+    padding: 0.875rem 1rem;
+    color: rgb(243 244 246);
+  }
+
+  .markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+
+  .markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(229 231 235);
+  }
+
+  .markdown-body th,
+  .markdown-body td {
+    border-bottom: 1px solid rgb(229 231 235);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.8125rem;
+  }
+
+  .markdown-body th {
+    background: rgb(249 250 251);
+    font-weight: 600;
+  }
+
+  .markdown-body a {
+    color: rgb(37 99 235);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .markdown-body hr {
+    border: 0;
+    border-top: 1px solid rgb(229 231 235);
+  }
+}

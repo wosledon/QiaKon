@@ -4,11 +4,14 @@ import type {
   AuditLog,
   AuthResponseData,
   BatchOperationRequest,
+  ChatStreamChunkData,
   ChatRequest,
   ChatResponseData,
   ComponentHealth,
   Connector,
   ConnectorFormData,
+  ConversationDetailDto,
+  ConversationHistoryDto,
   CreateDepartmentRequest,
   CreateRoleRequest,
   CreateUserRequest,
@@ -149,6 +152,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return result.data
 }
 
+async function readBlobResponse(response: Response): Promise<Blob> {
+  if (!response.ok) {
+    await handleResponse<never>(response)
+  }
+
+  return response.blob()
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     method: 'GET',
@@ -183,14 +194,25 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return handleResponse<T>(response)
 }
 
-export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+export async function apiUpload<T>(path: string, formData: FormData, signal?: AbortSignal): Promise<T> {
   const headers = buildHeaders({}, false)
   const response = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers,
     body: formData,
+    signal,
   })
   return handleResponse<T>(response)
+}
+
+export async function apiPostBlob(path: string, body?: unknown): Promise<Blob> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  return readBlobResponse(response)
 }
 
 // Auth API
@@ -203,25 +225,93 @@ export const authApi = {
 export const chatApi = {
   send: (request: ChatRequest) =>
     apiPost<ChatResponseData>('/retrieval/chat', request),
+
+  sendStream: async (
+    request: ChatRequest,
+    handlers: {
+      onChunk: (chunk: ChatStreamChunkData) => void
+      onDone: (payload: ChatResponseData) => void
+      onError?: (message: string) => void
+      signal?: AbortSignal
+    },
+  ) => {
+    const response = await fetch(`${BASE_URL}/retrieval/chat/stream`, {
+      method: 'POST',
+      headers: buildHeaders({ Accept: 'text/event-stream' }),
+      body: JSON.stringify(request),
+      signal: handlers.signal,
+    })
+
+    if (!response.ok || !response.body) {
+      const error = await handleResponse<never>(response)
+      return error
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const processEvent = (rawEvent: string) => {
+      const lines = rawEvent.split(/\r?\n/)
+      let eventName = 'message'
+      const dataLines: string[] = []
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim()
+          continue
+        }
+
+        if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim())
+        }
+      }
+
+      if (dataLines.length === 0) {
+        return
+      }
+
+      const payload = JSON.parse(dataLines.join('\n')) as Record<string, unknown>
+      if (eventName === 'chunk') {
+        handlers.onChunk({ delta: String(payload.delta ?? '') })
+        return
+      }
+
+      if (eventName === 'done') {
+        handlers.onDone(payload as unknown as ChatResponseData)
+        return
+      }
+
+      if (eventName === 'error') {
+        const message = String(payload.message ?? '流式响应失败')
+        handlers.onError?.(message)
+        throw new Error(message)
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const events = buffer.split(/\r?\n\r?\n/)
+      buffer = events.pop() ?? ''
+      for (const eventText of events) {
+        if (eventText.trim()) {
+          processEvent(eventText)
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      processEvent(buffer)
+    }
+  },
 }
 
 // History API
-export interface ConversationHistoryDto {
-  id: string
-  title: string
-  messageCount: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ConversationDetailDto {
-  id: string
-  title: string
-  messages: { id: string; role: string; content: string; createdAt: string; sources?: unknown[] }[]
-  createdAt: string
-  updatedAt: string
-}
-
 export interface PagedResultDto<T> {
   items: T[]
   totalCount: number
@@ -230,12 +320,12 @@ export interface PagedResultDto<T> {
 }
 
 export const ragApi = {
-  getHistory: (page = 1, pageSize = 50) =>
-    apiGet<PagedResultDto<ConversationHistoryDto>>(`/retrieval/history?page=${page}&pageSize=${pageSize}`),
+  getHistory: (page = 1, pageSize = 50, keyword?: string) =>
+    apiGet<PagedResultDto<ConversationHistoryDto>>(`/retrieval/history?page=${page}&pageSize=${pageSize}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`),
   getDetail: (id: string) => apiGet<ConversationDetailDto>(`/retrieval/history/${id}`),
   deleteHistory: (id: string) => apiDelete<void>(`/retrieval/history/${id}`),
   updateTitle: (id: string, title: string) => apiPut<ConversationDetailDto>(`/retrieval/history/${id}/title`, { title }),
-  exportMarkdown: (id: string) => apiGet<Blob>(`/retrieval/history/${id}/export`),
+  exportMarkdown: (id: string) => apiPostBlob(`/retrieval/history/${id}/export`),
 }
 
 // Document API
@@ -249,16 +339,16 @@ export const documentApi = {
     return toFrontendDocumentDetail(data)
   },
   update: (id: string, data: Partial<Document>) => apiPut<Document>(`/documents/${id}`, data),
-  upload: (file: File, metadata?: Record<string, string>) => {
+  upload: (file: File, metadata?: Record<string, string>, options?: { signal?: AbortSignal }) => {
     const formData = new FormData()
     formData.append('file', file)
     if (metadata) {
       Object.entries(metadata).forEach(([k, v]) => formData.append(k, v))
     }
-    return apiUpload<Document>('/documents', formData)
+    return apiUpload<Document>('/documents', formData, options?.signal)
   },
   delete: (id: string) => apiDelete<void>(`/documents/${id}`),
-  batchDelete: (ids: string[]) => apiPost<void>('/documents/batch-delete', { ids }),
+  batchDelete: (ids: string[]) => apiPost<void>('/documents/batch-delete', { documentIds: ids }),
   reparse: (id: string, chunkingStrategy?: 'Auto' | 'MoE' | 'Character') =>
     apiPost<void>(`/documents/${id}/reparse`, {
       chunkingStrategy: chunkingStrategy && chunkingStrategy !== 'Auto' ? chunkingStrategy : null,
@@ -310,8 +400,16 @@ export const graphApi = {
   entityTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/entity-types'),
   relationTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/relation-types'),
 
-  entities: (params?: GraphEntityParams) =>
-    apiGet<PagedList<GraphEntity>>(`/graphs/entities${buildQuery(params ?? {})}`),
+  entities: (params?: GraphEntityParams) => {
+    const mappedParams = {
+      page: params?.page,
+      pageSize: params?.pageSize,
+      name: params?.search,
+      type: params?.type,
+      departmentId: params?.department,
+    }
+    return apiGet<PagedList<GraphEntity>>(`/graphs/entities${buildQuery(mappedParams)}`)
+  },
   entity: (id: string) => apiGet<GraphEntity>(`/graphs/entities/${id}`),
   createEntity: (entity: { name: string; type: string; properties?: Record<string, unknown>; departmentId?: string | null; isPublic?: boolean }) =>
     apiPost<GraphEntity>('/graphs/entities', entity),
@@ -321,8 +419,16 @@ export const graphApi = {
   searchEntities: (keyword: string) =>
     apiGet<GraphEntity[]>(`/graphs/entities/search?keyword=${encodeURIComponent(keyword)}`),
 
-  relations: (params?: GraphRelationParams) =>
-    apiGet<PagedList<GraphRelation>>(`/graphs/relations${buildQuery(params ?? {})}`),
+  relations: (params?: GraphRelationParams) => {
+    const mappedParams = {
+      page: params?.page,
+      pageSize: params?.pageSize,
+      type: params?.type,
+      sourceEntityId: params?.sourceId,
+      targetEntityId: params?.targetId,
+    }
+    return apiGet<PagedList<GraphRelation>>(`/graphs/relations${buildQuery(mappedParams)}`)
+  },
   relation: (id: string) => apiGet<GraphRelation>(`/graphs/relations/${id}`),
   createRelation: (relation: { sourceId: string; targetId: string; type: string; properties?: Record<string, unknown> }) =>
     apiPost<GraphRelation>('/graphs/relations', relation),

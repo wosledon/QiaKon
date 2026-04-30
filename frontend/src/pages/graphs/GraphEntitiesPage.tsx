@@ -5,21 +5,15 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { EntityEditModal } from '@/components/graphs/EntityEditModal'
 import { graphApi } from '@/services/api'
 import type { GraphEntity } from '@/types'
-import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react'
+import { Search, Eye } from 'lucide-react'
 
 const entityTypeOptions = [
   { value: '', label: '全部类型' },
-  { value: '人物', label: '人物' },
-  { value: '组织', label: '组织' },
-  { value: '产品', label: '产品' },
-  { value: '技术', label: '技术' },
-  { value: '项目', label: '项目' },
   { value: '文档', label: '文档' },
-  { value: '其他', label: '其他' },
+  { value: '章节', label: '章节' },
+  { value: '片段', label: '片段' },
 ]
 
 function formatDate(iso?: string): string {
@@ -39,14 +33,6 @@ export function GraphEntitiesPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingEntity, setEditingEntity] = useState<GraphEntity | null>(null)
-
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deletingName, setDeletingName] = useState('')
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const loadEntities = useCallback(async () => {
     setIsLoading(true)
@@ -79,45 +65,13 @@ export function GraphEntitiesPage() {
     loadEntities()
   }
 
-  const handleOpenCreate = () => {
-    setEditingEntity(null)
-    setModalOpen(true)
-  }
-
-  const handleOpenEdit = (entity: GraphEntity) => {
-    setEditingEntity(entity)
-    setModalOpen(true)
-  }
-
-  const handleDeletePrompt = (entity: GraphEntity) => {
-    setDeletingId(entity.id)
-    setDeletingName(entity.name)
-    setConfirmOpen(true)
-  }
-
-  const handleDeleteConfirm = async () => {
-    if (!deletingId) return
-    setDeleteLoading(true)
-    try {
-      await graphApi.deleteEntity(deletingId)
-      setConfirmOpen(false)
-      setDeletingId(null)
-      loadEntities()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败')
-    } finally {
-      setDeleteLoading(false)
-    }
-  }
-
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <PageHeader title="实体管理" description="浏览、搜索、新建和编辑知识图谱实体">
-        <Button onClick={handleOpenCreate}>
-          <Plus className="w-4 h-4 mr-1" />
-          新建实体
-        </Button>
-      </PageHeader>
+      <PageHeader title="实体浏览" description="实体由文档自动生成，当前页面以浏览和检索为主" />
+
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        如需更新实体，请修改来源文档后重新解析或重建索引；这里不再作为手工维护入口。
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -164,7 +118,7 @@ export function GraphEntitiesPage() {
       ) : entities.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <p className="text-lg">暂无实体</p>
-          <p className="text-sm mt-1">点击上方按钮创建实体</p>
+          <p className="text-sm mt-1">上传并索引文档后会自动生成图谱实体</p>
         </div>
       ) : (
         <>
@@ -180,12 +134,6 @@ export function GraphEntitiesPage() {
                 <div className="flex items-center gap-2 mt-3 sm:mt-0 flex-shrink-0">
                   <Button variant="ghost" size="sm" onClick={() => navigate(`/graphs/entities/${entity.id}`)}>
                     <Eye className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(entity)}>
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeletePrompt(entity)} className="text-gray-400 hover:text-red-600">
-                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </Card>
@@ -218,22 +166,6 @@ export function GraphEntitiesPage() {
           </div>
         </>
       )}
-
-      <EntityEditModal
-        open={modalOpen}
-        entity={editingEntity}
-        onClose={() => setModalOpen(false)}
-        onSuccess={loadEntities}
-      />
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="删除实体"
-        message={`确定要删除实体 "${deletingName}" 吗？此操作不可恢复。`}
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setConfirmOpen(false)}
-        isLoading={deleteLoading}
-      />
     </div>
   )
 }

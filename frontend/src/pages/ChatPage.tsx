@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { BrainCircuit, MessageSquareMore } from 'lucide-react'
+import { ChatMessageBubble } from '@/components/chat/ChatMessageBubble'
+import { ConversationHistoryPanel } from '@/components/chat/ConversationHistoryPanel'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { chatApi } from '@/services/api'
-import type { ChatResponseData, Source } from '@/types'
+import { chatApi, ragApi } from '@/services/api'
+import type { ChatResponseData, ConversationDetailDto, Source } from '@/types'
 
 interface Turn {
   id: string
@@ -10,162 +14,308 @@ interface Turn {
   content: string
   sources?: Source[]
   turns?: number
+  isStreaming?: boolean
 }
 
 export function ChatPage() {
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [enableThinking, setEnableThinking] = useState(false)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0)
+  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const loadingConversationIdRef = useRef<string | null>(null)
+
+  const conversationIdFromUrl = searchParams.get('conversationId') ?? undefined
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns])
 
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  useEffect(() => {
+    if (!conversationIdFromUrl) {
+      setConversationId(undefined)
+      setTurns([])
+      return
+    }
+
+    if (loadingConversationIdRef.current === conversationIdFromUrl) {
+      return
+    }
+
+    loadingConversationIdRef.current = conversationIdFromUrl
+    setIsLoading(true)
+    setError('')
+
+    ragApi.getDetail(conversationIdFromUrl)
+      .then((detail) => {
+        setConversationId(detail.id)
+        setTurns(mapConversationTurns(detail))
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : '加载历史会话失败')
+      })
+      .finally(() => {
+        setIsLoading(false)
+        loadingConversationIdRef.current = null
+      })
+  }, [conversationIdFromUrl])
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
+    abortRef.current?.abort()
     const query = input.trim()
     const userTurn: Turn = {
       id: crypto.randomUUID(),
       role: 'user',
       content: query,
     }
+    const assistantTurnId = crypto.randomUUID()
+    const assistantTurn: Turn = {
+      id: assistantTurnId,
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+    }
+
     setTurns((prev) => [...prev, userTurn])
+    setTurns((prev) => [...prev, assistantTurn])
     setInput('')
     setIsLoading(true)
     setError('')
 
+    const abortController = new AbortController()
+    abortRef.current = abortController
+
     try {
-      const data: ChatResponseData = await chatApi.send({
+      let streamedResponse: ChatResponseData | null = null
+
+      await chatApi.sendStream({
         query,
         conversationId,
-      })
-      setConversationId(data.conversationId)
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: data.response,
-          sources: data.sources,
-          turns: data.turns,
+        enableThinking,
+      }, {
+        signal: abortController.signal,
+        onChunk: ({ delta }) => {
+          setTurns((prev) => prev.map((turn) => (
+            turn.id === assistantTurnId
+              ? { ...turn, content: `${turn.content}${delta}`, isStreaming: true }
+              : turn
+          )))
         },
-      ])
+        onDone: (payload) => {
+          streamedResponse = payload
+          setConversationId(payload.conversationId)
+          setHistoryRefreshToken((prev) => prev + 1)
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
+            next.set('conversationId', payload.conversationId)
+            return next
+          })
+          setTurns((prev) => prev.map((turn) => (
+            turn.id === assistantTurnId
+              ? {
+                  ...turn,
+                  content: payload.response,
+                  sources: payload.sources,
+                  turns: payload.turns,
+                  isStreaming: false,
+                }
+              : turn
+          )))
+        },
+      })
+
+      if (!streamedResponse) {
+        throw new Error('流式响应未完成，请稍后重试')
+      }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+
       const message = err instanceof Error ? err.message : '请求失败'
       setError(message)
+      setTurns((prev) => prev.filter((turn) => turn.id !== assistantTurnId))
     } finally {
       setIsLoading(false)
+      abortRef.current = null
     }
   }
 
   const handleNewChat = () => {
+    abortRef.current?.abort()
     setTurns([])
     setConversationId(undefined)
     setError('')
     setInput('')
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('conversationId')
+      return next
+    })
+  }
+
+  const handleSelectConversation = (selectedId: string) => {
+    abortRef.current?.abort()
+    setError('')
+    setInput('')
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('conversationId', selectedId)
+      return next
+    })
+  }
+
+  const handleDeletedConversation = (deletedId: string) => {
+    if ((conversationId ?? conversationIdFromUrl) !== deletedId) {
+      return
+    }
+
+    handleNewChat()
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          {conversationId ? (
-            <span>会话 ID: <span className="font-mono text-gray-700">{conversationId.slice(0, 8)}...</span></span>
-          ) : (
-            <span>新会话</span>
-          )}
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-50">
+      <aside className={[
+        'hidden flex-shrink-0 border-r border-gray-200 bg-white transition-[width] duration-300 lg:block',
+        isHistoryCollapsed ? 'w-[64px]' : 'w-[320px]',
+      ].join(' ')}>
+        <ConversationHistoryPanel
+          mode="sidebar"
+          selectedConversationId={conversationIdFromUrl}
+          onSelectConversation={handleSelectConversation}
+          onDeletedConversation={handleDeletedConversation}
+          collapsed={isHistoryCollapsed}
+          onToggleCollapse={() => setIsHistoryCollapsed((prev) => !prev)}
+          refreshKey={historyRefreshToken}
+        />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+          <div className="space-y-1 text-sm text-gray-500">
+            {conversationId ? (
+              <span>会话 ID: <span className="font-mono text-gray-700">{conversationId.slice(0, 8)}...</span></span>
+            ) : (
+              <span>{location.pathname === '/' ? '首页对话' : '新会话'}</span>
+            )}
+            <p className="text-xs text-gray-400">回复支持 Markdown，已切换为流式输出。</p>
+            <p className="text-xs text-gray-400">支持 <code className="rounded bg-gray-100 px-1 py-0.5">&lt;think&gt;</code> 思考标签，默认折叠显示。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={handleNewChat}>
+              <MessageSquareMore className="mr-1 h-4 w-4" />
+              新对话
+            </Button>
+          </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={handleNewChat}>
-          新对话
-        </Button>
-      </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {turns.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            <p className="text-lg">开始提问吧</p>
-            <p className="text-sm mt-1">基于知识图谱的智能问答</p>
-          </div>
-        )}
-
-        {turns.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[80%] md:max-w-[60%] rounded-2xl px-5 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-md'
-                  : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
-              }`}
-            >
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-              {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 mb-2">参考来源</p>
-                  <div className="space-y-2">
-                    {msg.sources.map((source, index) => (
-                      <div key={`${source.documentId}-${index}`} className="bg-gray-50 rounded-lg px-3 py-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-gray-700 truncate">{source.title}</span>
-                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">{(source.score * 100).toFixed(1)}%</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{source.snippet}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {turns.length === 0 && (
+            <div className="flex h-full flex-col items-center justify-center text-gray-400">
+              <svg className="mb-4 h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              <p className="text-lg">开始提问吧</p>
+              <p className="mt-1 text-sm">基于知识图谱的智能问答</p>
+              <p className="mt-2 text-xs text-gray-400 lg:hidden">桌面端可在左侧直接查看历史会话列表。</p>
             </div>
-          </div>
-        ))}
+          )}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-md px-5 py-3 shadow-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+          {turns.map((msg) => (
+            <ChatMessageBubble
+              key={msg.id}
+              role={msg.role}
+              content={msg.content}
+              sources={msg.sources}
+              isStreaming={msg.isStreaming}
+            />
+          ))}
+
+          {isLoading && turns.length === 0 && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl rounded-bl-md border border-gray-200 bg-white px-5 py-3 shadow-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
+                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0.2s]" />
+                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0.4s]" />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 text-center">
-            {error}
-          </div>
-        )}
-      </div>
+          {error && (
+            <div className="rounded-lg bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+              {error}
+            </div>
+          )}
+        </div>
 
-      {/* Input */}
-      <div className="bg-white border-t border-gray-200 p-4">
-        <form onSubmit={handleSubmit} className="flex items-end gap-3 max-w-4xl mx-auto">
-          <div className="flex-1">
-            <Input
-              placeholder="输入问题..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={isLoading}
-              className="w-full"
-            />
-          </div>
-          <Button type="submit" disabled={isLoading || !input.trim()} size="md">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </Button>
-        </form>
+        {/* Input */}
+        <div className="border-t border-gray-200 bg-white p-4">
+          <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-3">
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  placeholder="输入问题..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={isLoading}
+                  className="w-full"
+                />
+              </div>
+              <Button type="submit" disabled={isLoading || !input.trim()} size="md">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </Button>
+            </div>
+
+            <label className="inline-flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={enableThinking}
+                onChange={(e) => setEnableThinking(e.target.checked)}
+                disabled={isLoading}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="space-y-1">
+                <span className="flex items-center gap-2 font-medium text-gray-800">
+                  <BrainCircuit className="h-4 w-4 text-blue-600" />
+                  深度思考
+                </span>
+                <span className="block text-xs text-gray-500">
+                  开启后，会要求模型使用 <code className="rounded bg-white px-1 py-0.5">&lt;think&gt;</code> 输出思考过程；思考内容默认折叠展示。
+                </span>
+              </span>
+            </label>
+          </form>
+        </div>
       </div>
     </div>
   )
+}
+
+function mapConversationTurns(detail: ConversationDetailDto): Turn[] {
+  return detail.messages.map((message) => ({
+    id: message.id,
+    role: message.role === 'assistant' ? 'assistant' : 'user',
+    content: message.content,
+    sources: message.sources,
+  }))
 }

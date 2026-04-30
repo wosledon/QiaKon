@@ -18,6 +18,20 @@ public class AuditLoggingMiddleware
         var stopwatch = Stopwatch.StartNew();
         var originalBodyStream = context.Response.Body;
 
+        if (IsStreamingRequest(context))
+        {
+            await _next(context);
+            stopwatch.Stop();
+
+            _logger.LogInformation(
+                "HTTP {Method} {Path} responded {StatusCode} in {ElapsedMs}ms (stream)",
+                context.Request.Method,
+                context.Request.Path,
+                context.Response.StatusCode,
+                stopwatch.ElapsedMilliseconds);
+            return;
+        }
+
         try
         {
             using var responseBody = new MemoryStream();
@@ -41,6 +55,17 @@ public class AuditLoggingMiddleware
         {
             context.Response.Body = originalBodyStream;
         }
+    }
+
+    private static bool IsStreamingRequest(HttpContext context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api/retrieval/chat/stream", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var acceptHeader = context.Request.Headers.Accept.ToString();
+        return acceptHeader.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase);
     }
 }
 

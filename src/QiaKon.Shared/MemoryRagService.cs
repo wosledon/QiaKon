@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -97,6 +98,26 @@ public sealed class MemoryRagService : IRagService
         return new RagChatResponseDto(response, sources, conversationId, session.Messages.Count / 2);
     }
 
+    public async IAsyncEnumerable<RagChatStreamEventDto> StreamChat(
+        RagChatRequestDto request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var response = Chat(request);
+        foreach (var segment in SplitText(response.Response, 24))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new RagChatStreamEventDto("chunk", Delta: segment);
+            await Task.Yield();
+        }
+
+        yield return new RagChatStreamEventDto(
+            "done",
+            Response: response.Response,
+            Sources: response.Sources,
+            ConversationId: response.ConversationId,
+            Turns: response.Turns);
+    }
+
     public IReadOnlyList<ConversationHistoryDto> GetConversationHistory(int offset, int limit, Guid? userId = null)
     {
         return _sessions.Values
@@ -187,6 +208,22 @@ public sealed class MemoryRagService : IRagService
     private static string TruncateText(string text, int maxLength)
     {
         return text.Length <= maxLength ? text : text[..(maxLength - 3)] + "...";
+    }
+
+    private static IReadOnlyList<string> SplitText(string text, int chunkLength)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Array.Empty<string>();
+        }
+
+        var parts = new List<string>();
+        for (var i = 0; i < text.Length; i += chunkLength)
+        {
+            parts.Add(text.Substring(i, Math.Min(chunkLength, text.Length - i)));
+        }
+
+        return parts;
     }
 
     private sealed record RetrievalChunk(Guid Id, Guid DocumentId, string DocumentTitle, string Text, int StartIndex, int EndIndex);

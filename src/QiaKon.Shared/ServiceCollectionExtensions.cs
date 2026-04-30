@@ -63,6 +63,7 @@ public static class ServiceCollectionExtensions
         // Core services backed by PostgreSQL
         services.AddScoped<IDocumentService, PostgresDocumentService>();
         services.AddScoped<IGraphService, PostgresGraphService>();
+        services.AddScoped<DocumentGraphProjectionService>();
         services.AddScoped<DocumentIndexingRuntime>();
         services.AddScoped<IDashboardService, PostgresDashboardService>();
         services.AddScoped<IGraphOverviewService, PostgresGraphOverviewService>();

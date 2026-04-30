@@ -19,7 +19,7 @@ import type {
   GraphPreviewData,
   GraphPreviewNode,
 } from '@/types'
-import { GraphPreview, getTypeColor } from '@/components/graphs/GraphPreview'
+import { GraphPreview } from '@/components/graphs/GraphPreview'
 
 export function GraphOverviewPage() {
   const [overview, setOverview] = useState<GraphOverview | null>(null)
@@ -78,7 +78,11 @@ export function GraphOverviewPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
-      <PageHeader title="图谱概览" description="知识图谱整体统计与分布" />
+      <PageHeader title="图谱概览" description="知识图谱由文档索引自动构建，展示整体统计与结构分布" />
+
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        当前图谱以自动生成的文档、章节、片段结构为主；如需更新图谱，请在文档页重新解析或重建索引。
+      </div>
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 flex items-center justify-between">
@@ -168,12 +172,7 @@ export function GraphOverviewPage() {
                     <div>
                       <p className="text-xs text-gray-500">类型</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{
-                            backgroundColor: getTypeColor(selectedNode.type),
-                          }}
-                        />
+                        <span className={`h-2.5 w-2.5 rounded-full ${getTypeBadgeClass(selectedNode.type)}`} />
                         <p className="text-sm text-gray-700">{selectedNode.type}</p>
                       </div>
                     </div>
@@ -256,12 +255,11 @@ export function GraphOverviewPage() {
               {entityTypes.map((t) => (
                 <div key={t.type} className="flex items-center gap-3">
                   <span className="text-sm text-gray-600 w-20 truncate">{t.type}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(t.percentage, 100)}%` }}
-                    />
-                  </div>
+                  <progress
+                    className="flex-1 overflow-hidden rounded-full [&::-moz-progress-bar]:bg-purple-500 [&::-webkit-progress-bar]:bg-gray-100 [&::-webkit-progress-value]:bg-purple-500"
+                    max={100}
+                    value={Math.min(t.percentage, 100)}
+                  />
                   <span className="text-sm font-medium text-gray-900 w-16 text-right tabular-nums">
                     {t.count}
                   </span>
@@ -294,12 +292,11 @@ export function GraphOverviewPage() {
               {relationTypes.map((t) => (
                 <div key={t.type} className="flex items-center gap-3">
                   <span className="text-sm text-gray-600 w-20 truncate">{t.type}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(t.percentage, 100)}%` }}
-                    />
-                  </div>
+                  <progress
+                    className="flex-1 overflow-hidden rounded-full [&::-moz-progress-bar]:bg-blue-500 [&::-webkit-progress-bar]:bg-gray-100 [&::-webkit-progress-value]:bg-blue-500"
+                    max={100}
+                    value={Math.min(t.percentage, 100)}
+                  />
                   <span className="text-sm font-medium text-gray-900 w-16 text-right tabular-nums">
                     {t.count}
                   </span>
@@ -311,4 +308,17 @@ export function GraphOverviewPage() {
       </div>
     </div>
   )
+}
+
+function getTypeBadgeClass(type: string): string {
+  switch (type) {
+    case '文档':
+      return 'bg-blue-500'
+    case '章节':
+      return 'bg-purple-500'
+    case '片段':
+      return 'bg-emerald-500'
+    default:
+      return 'bg-gray-400'
+  }
 }

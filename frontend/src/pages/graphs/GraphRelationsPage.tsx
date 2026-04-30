@@ -4,21 +4,15 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { RelationEditModal } from '@/components/graphs/RelationEditModal'
 import { graphApi } from '@/services/api'
 import type { GraphRelation } from '@/types'
-import { Plus, Search, Edit, Trash2 } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 const relationTypeOptions = [
   { value: '', label: '全部类型' },
-  { value: '属于', label: '属于' },
-  { value: '负责', label: '负责' },
   { value: '包含', label: '包含' },
-  { value: '依赖', label: '依赖' },
-  { value: '关联', label: '关联' },
-  { value: '引用', label: '引用' },
-  { value: '其他', label: '其他' },
+  { value: '子章节', label: '子章节' },
+  { value: '下一段', label: '下一段' },
 ]
 
 function formatDate(iso?: string): string {
@@ -37,14 +31,6 @@ export function GraphRelationsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
   const [targetFilter, setTargetFilter] = useState('')
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingRelation, setEditingRelation] = useState<GraphRelation | null>(null)
-
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deletingName, setDeletingName] = useState('')
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const loadRelations = useCallback(async () => {
     setIsLoading(true)
@@ -77,45 +63,13 @@ export function GraphRelationsPage() {
     loadRelations()
   }
 
-  const handleOpenCreate = () => {
-    setEditingRelation(null)
-    setModalOpen(true)
-  }
-
-  const handleOpenEdit = (relation: GraphRelation) => {
-    setEditingRelation(relation)
-    setModalOpen(true)
-  }
-
-  const handleDeletePrompt = (relation: GraphRelation) => {
-    setDeletingId(relation.id)
-    setDeletingName(`${relation.sourceName} → ${relation.targetName}`)
-    setConfirmOpen(true)
-  }
-
-  const handleDeleteConfirm = async () => {
-    if (!deletingId) return
-    setDeleteLoading(true)
-    try {
-      await graphApi.deleteRelation(deletingId)
-      setConfirmOpen(false)
-      setDeletingId(null)
-      loadRelations()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败')
-    } finally {
-      setDeleteLoading(false)
-    }
-  }
-
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <PageHeader title="关系管理" description="浏览、搜索、新建和编辑实体之间的关系">
-        <Button onClick={handleOpenCreate}>
-          <Plus className="w-4 h-4 mr-1" />
-          新建关系
-        </Button>
-      </PageHeader>
+      <PageHeader title="关系浏览" description="关系由文档结构自动生成，用于追踪文档与章节之间的连接" />
+
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        当前图谱关系主要来自文档包含、章节层级和片段顺序，不建议在此手工维护。
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -157,7 +111,7 @@ export function GraphRelationsPage() {
       ) : relations.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <p className="text-lg">暂没关系</p>
-          <p className="text-sm mt-1">点击上方按钮创建关系</p>
+          <p className="text-sm mt-1">文档自动建图后，这里会展示结构化关系</p>
         </div>
       ) : (
         <>
@@ -173,14 +127,6 @@ export function GraphRelationsPage() {
                   <p className="text-sm text-gray-500 mt-0.5">
                     {relation.type} · {formatDate(relation.createdAt)}
                   </p>
-                </div>
-                <div className="flex items-center gap-2 mt-3 sm:mt-0 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(relation)}>
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeletePrompt(relation)} className="text-gray-400 hover:text-red-600">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
                 </div>
               </Card>
             ))}
@@ -212,22 +158,6 @@ export function GraphRelationsPage() {
           </div>
         </>
       )}
-
-      <RelationEditModal
-        open={modalOpen}
-        relation={editingRelation}
-        onClose={() => setModalOpen(false)}
-        onSuccess={loadRelations}
-      />
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="删除关系"
-        message={`确定要删除关系 "${deletingName}" 吗？此操作不可恢复。`}
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setConfirmOpen(false)}
-        isLoading={deleteLoading}
-      />
     </div>
   )
 }

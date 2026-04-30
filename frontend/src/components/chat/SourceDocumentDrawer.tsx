@@ -1,7 +1,35 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { FileText, Highlighter, Loader2, PanelRightClose, X } from 'lucide-react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { documentApi } from '@/services/api'
 import type { DocumentDetail, Source } from '@/types'
+
+type HighlightableTag =
+  | 'p'
+  | 'li'
+  | 'blockquote'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'h5'
+  | 'h6'
+  | 'td'
+  | 'th'
+  | 'a'
+  | 'strong'
+  | 'em'
 
 interface SourceDocumentDrawerProps {
   source: Source | null
@@ -47,13 +75,49 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
   }, [open, source?.documentId])
 
   const highlightTarget = source?.text?.trim() || source?.snippet?.trim() || ''
-  const highlightedContent = useMemo(() => {
-    if (!document?.content) {
-      return null
-    }
+  const markdownComponents = useMemo<Components>(() => {
+    const withHighlightedChildren =
+      (tagName: HighlightableTag) =>
+      ({ children, ...props }: any) => {
+        return createElementByTag(
+          tagName,
+          props,
+          renderHighlightedNode(children, highlightTarget)
+        )
+      }
 
-    return renderHighlightedContent(document.content, highlightTarget)
-  }, [document?.content, highlightTarget])
+    return {
+      p: withHighlightedChildren('p'),
+      li: withHighlightedChildren('li'),
+      blockquote: withHighlightedChildren('blockquote'),
+      h1: withHighlightedChildren('h1'),
+      h2: withHighlightedChildren('h2'),
+      h3: withHighlightedChildren('h3'),
+      h4: withHighlightedChildren('h4'),
+      h5: withHighlightedChildren('h5'),
+      h6: withHighlightedChildren('h6'),
+      td: withHighlightedChildren('td'),
+      th: withHighlightedChildren('th'),
+      a: withHighlightedChildren('a'),
+      strong: withHighlightedChildren('strong'),
+      em: withHighlightedChildren('em'),
+      code: ({ inline, children, className, ...props }: any) => {
+        if (inline) {
+          return (
+            <code className={className} {...props}>
+              {renderHighlightedNode(children, highlightTarget)}
+            </code>
+          )
+        }
+
+        return (
+          <code className={className} {...props}>
+            {children}
+          </code>
+        )
+      },
+    }
+  }, [highlightTarget])
 
   return (
     <>
@@ -142,8 +206,10 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
 
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
                   <div className="mb-3 text-xs font-medium text-gray-500">文档内容</div>
-                  <div className="max-h-none whitespace-pre-wrap break-words text-sm leading-7 text-gray-800">
-                    {highlightedContent}
+                  <div className="markdown-body max-h-none break-words text-sm leading-7 text-gray-800">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {document.content}
+                    </ReactMarkdown>
                   </div>
                 </div>
               </div>
@@ -157,7 +223,75 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
   )
 }
 
-function renderHighlightedContent(content: string, target: string) {
+function createElementByTag(
+  tagName: HighlightableTag,
+  props: Record<string, unknown>,
+  children?: ReactNode
+) {
+  switch (tagName) {
+    case 'p':
+      return <p {...props}>{children}</p>
+    case 'li':
+      return <li {...props}>{children}</li>
+    case 'blockquote':
+      return <blockquote {...props}>{children}</blockquote>
+    case 'h1':
+      return <h1 {...props}>{children}</h1>
+    case 'h2':
+      return <h2 {...props}>{children}</h2>
+    case 'h3':
+      return <h3 {...props}>{children}</h3>
+    case 'h4':
+      return <h4 {...props}>{children}</h4>
+    case 'h5':
+      return <h5 {...props}>{children}</h5>
+    case 'h6':
+      return <h6 {...props}>{children}</h6>
+    case 'td':
+      return <td {...props}>{children}</td>
+    case 'th':
+      return <th {...props}>{children}</th>
+    case 'a':
+      return <a {...props}>{children}</a>
+    case 'strong':
+      return <strong {...props}>{children}</strong>
+    case 'em':
+      return <em {...props}>{children}</em>
+    default:
+      return <span {...props}>{children}</span>
+  }
+}
+
+function renderHighlightedNode(node: ReactNode, target: string): ReactNode {
+  if (!target || node === null || node === undefined || typeof node === 'boolean') {
+    return node
+  }
+
+  if (typeof node === 'string') {
+    return renderHighlightedText(node, target)
+  }
+
+  if (typeof node === 'number') {
+    return renderHighlightedText(String(node), target)
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child, index) => (
+      <Fragment key={index}>{renderHighlightedNode(child, target)}</Fragment>
+    ))
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    const element = node as ReactElement<{ children?: ReactNode }>
+    return cloneElement(element, {
+      children: renderHighlightedNode(element.props.children, target),
+    })
+  }
+
+  return Children.map(node, (child) => renderHighlightedNode(child, target))
+}
+
+function renderHighlightedText(content: string, target: string) {
   if (!target) {
     return content
   }

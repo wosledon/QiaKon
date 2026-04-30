@@ -291,7 +291,7 @@ export function ChatPage() {
               onClick={() => setEnableThinking((prev) => !prev)}
               disabled={isLoading}
               className={[
-                'inline-flex items-start gap-3 rounded-xl border px-3 py-2 text-left text-sm transition-all',
+                'inline-flex items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm transition-all',
                 enableThinking
                   ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm'
                   : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100',
@@ -299,12 +299,12 @@ export function ChatPage() {
               ].join(' ')}
             >
               <span className={[
-                'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border',
+                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border',
                 enableThinking ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 bg-white text-transparent',
               ].join(' ')}>
                 <span className="text-[11px]">✓</span>
               </span>
-              <span className="space-y-1">
+              <span>
                 <span className={[
                   'flex items-center gap-2 font-medium',
                   enableThinking ? 'text-blue-800' : 'text-gray-800',
@@ -316,12 +316,6 @@ export function ChatPage() {
                       已开启
                     </span>
                   )}
-                </span>
-                <span className={[
-                  'block text-xs',
-                  enableThinking ? 'text-blue-700/90' : 'text-gray-500',
-                ].join(' ')}>
-                  开启后，会要求模型使用 <code className="rounded bg-white px-1 py-0.5">&lt;think&gt;</code> 输出思考过程；思考内容默认折叠展示。
                 </span>
               </span>
             </button>

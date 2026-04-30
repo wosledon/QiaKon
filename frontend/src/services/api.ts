@@ -278,7 +278,7 @@ export const chatApi = {
       }
 
       if (eventName === 'done') {
-        handlers.onDone(payload as unknown as ChatResponseData)
+        handlers.onDone(normalizeChatResponseData(payload))
         return
       }
 
@@ -309,6 +309,53 @@ export const chatApi = {
       processEvent(buffer)
     }
   },
+}
+
+type RawSourcePayload = Partial<{
+  documentId: string
+  DocumentId: string
+  title: string
+  Title: string
+  text: string
+  Text: string
+  snippet: string
+  Snippet: string
+  score: number | string
+  Score: number | string
+}>
+
+function normalizeChatResponseData(payload: Record<string, unknown>): ChatResponseData {
+  const rawSources = Array.isArray(payload.sources)
+    ? payload.sources
+    : Array.isArray(payload.Sources)
+      ? payload.Sources
+      : []
+
+  return {
+    response: String(payload.response ?? payload.Response ?? ''),
+    sources: rawSources.map((item) => normalizeSource(item as RawSourcePayload)),
+    conversationId: String(payload.conversationId ?? payload.ConversationId ?? ''),
+    turns: toNumber(payload.turns ?? payload.Turns),
+  }
+}
+
+function normalizeSource(source: RawSourcePayload) {
+  return {
+    documentId: String(source.documentId ?? source.DocumentId ?? ''),
+    title: String(source.title ?? source.Title ?? ''),
+    text: String(source.text ?? source.Text ?? ''),
+    snippet: String(source.snippet ?? source.Snippet ?? ''),
+    score: toNumber(source.score ?? source.Score),
+  }
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 // History API

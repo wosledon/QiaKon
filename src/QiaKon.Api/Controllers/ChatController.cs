@@ -10,6 +10,7 @@ namespace QiaKon.Api.Controllers;
 [Route("api/retrieval")]
 public class ChatController : ControllerBase
 {
+    private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IRagService _ragService;
     private readonly ConfiguredLlmModelResolver _modelResolver;
     private readonly ILogger<ChatController> _logger;
@@ -113,7 +114,7 @@ public class ChatController : ControllerBase
 
         async Task WriteSseEventAsync(string eventName, object payload)
         {
-            var json = JsonSerializer.Serialize(payload);
+            var json = JsonSerializer.Serialize(payload, SseJsonOptions);
             await Response.WriteAsync($"event: {eventName}\n");
             await Response.WriteAsync($"data: {json}\n\n");
             await Response.Body.FlushAsync(HttpContext.RequestAborted);

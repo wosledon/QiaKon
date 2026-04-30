@@ -1,35 +1,9 @@
-import {
-  Children,
-  Fragment,
-  cloneElement,
-  isValidElement,
-  type ReactElement,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
-import { FileText, Highlighter, Loader2, PanelRightClose, X } from 'lucide-react'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import { useEffect, useRef, useState } from 'react'
+import { Crosshair, FileText, Highlighter, Loader2, PanelRightClose, X } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { documentApi } from '@/services/api'
 import type { DocumentDetail, Source } from '@/types'
-
-type HighlightableTag =
-  | 'p'
-  | 'li'
-  | 'blockquote'
-  | 'h1'
-  | 'h2'
-  | 'h3'
-  | 'h4'
-  | 'h5'
-  | 'h6'
-  | 'td'
-  | 'th'
-  | 'a'
-  | 'strong'
-  | 'em'
 
 interface SourceDocumentDrawerProps {
   source: Source | null
@@ -41,6 +15,8 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
   const [document, setDocument] = useState<DocumentDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [highlightFound, setHighlightFound] = useState(false)
+  const markdownContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!open || !source?.documentId) {
@@ -50,6 +26,7 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
     let disposed = false
     setLoading(true)
     setError('')
+    setHighlightFound(false)
 
     documentApi.get(source.documentId)
       .then((data) => {
@@ -74,50 +51,30 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
     }
   }, [open, source?.documentId])
 
-  const highlightTarget = source?.text?.trim() || source?.snippet?.trim() || ''
-  const markdownComponents = useMemo<Components>(() => {
-    const withHighlightedChildren =
-      (tagName: HighlightableTag) =>
-      ({ children, ...props }: any) => {
-        return createElementByTag(
-          tagName,
-          props,
-          renderHighlightedNode(children, highlightTarget)
-        )
-      }
-
-    return {
-      p: withHighlightedChildren('p'),
-      li: withHighlightedChildren('li'),
-      blockquote: withHighlightedChildren('blockquote'),
-      h1: withHighlightedChildren('h1'),
-      h2: withHighlightedChildren('h2'),
-      h3: withHighlightedChildren('h3'),
-      h4: withHighlightedChildren('h4'),
-      h5: withHighlightedChildren('h5'),
-      h6: withHighlightedChildren('h6'),
-      td: withHighlightedChildren('td'),
-      th: withHighlightedChildren('th'),
-      a: withHighlightedChildren('a'),
-      strong: withHighlightedChildren('strong'),
-      em: withHighlightedChildren('em'),
-      code: ({ inline, children, className, ...props }: any) => {
-        if (inline) {
-          return (
-            <code className={className} {...props}>
-              {renderHighlightedNode(children, highlightTarget)}
-            </code>
-          )
-        }
-
-        return (
-          <code className={className} {...props}>
-            {children}
-          </code>
-        )
-      },
+  useEffect(() => {
+    const container = markdownContainerRef.current
+    if (!open || !document?.content || !container) {
+      return
     }
-  }, [highlightTarget])
+
+    clearSourceHighlights(container)
+
+    const marks = highlightSourceInContainer(container, buildHighlightCandidates(source))
+    setHighlightFound(marks.length > 0)
+
+    if (marks.length > 0) {
+      requestAnimationFrame(() => {
+        scrollToHighlight(marks[0])
+      })
+    }
+  }, [document?.content, open, source])
+
+  const handleJumpToReference = () => {
+    const firstHighlight = markdownContainerRef.current?.querySelector<HTMLElement>('mark[data-source-highlight="true"]')
+    if (firstHighlight) {
+      scrollToHighlight(firstHighlight)
+    }
+  }
 
   return (
     <>
@@ -156,9 +113,20 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
                     </span>
                   </div>
                   <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-900">
-                    <div className="mb-1 flex items-center gap-1 font-semibold text-amber-700">
-                      <Highlighter className="h-3.5 w-3.5" />
-                      引用片段
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 font-semibold text-amber-700">
+                        <Highlighter className="h-3.5 w-3.5" />
+                        引用片段
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleJumpToReference}
+                        disabled={!highlightFound}
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-white/70 px-2 py-1 text-[11px] font-medium text-amber-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Crosshair className="h-3.5 w-3.5" />
+                        跳转正文
+                      </button>
                     </div>
                     {source.snippet}
                   </div>
@@ -186,7 +154,7 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-source-scroll-container="true">
             {loading ? (
               <div className="flex h-full items-center justify-center text-sm text-gray-500">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -206,8 +174,18 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
 
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
                   <div className="mb-3 text-xs font-medium text-gray-500">文档内容</div>
-                  <div className="markdown-body max-h-none break-words text-sm leading-7 text-gray-800">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                  <div
+                    ref={markdownContainerRef}
+                    className="markdown-body max-h-none break-words text-sm leading-7 text-gray-800"
+                  >
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ node: _node, ...props }) => (
+                          <a {...props} target="_blank" rel="noreferrer" />
+                        ),
+                      }}
+                    >
                       {document.content}
                     </ReactMarkdown>
                   </div>
@@ -223,136 +201,274 @@ export function SourceDocumentDrawer({ source, open, onClose }: SourceDocumentDr
   )
 }
 
-function createElementByTag(
-  tagName: HighlightableTag,
-  props: Record<string, unknown>,
-  children?: ReactNode
-) {
-  switch (tagName) {
-    case 'p':
-      return <p {...props}>{children}</p>
-    case 'li':
-      return <li {...props}>{children}</li>
-    case 'blockquote':
-      return <blockquote {...props}>{children}</blockquote>
-    case 'h1':
-      return <h1 {...props}>{children}</h1>
-    case 'h2':
-      return <h2 {...props}>{children}</h2>
-    case 'h3':
-      return <h3 {...props}>{children}</h3>
-    case 'h4':
-      return <h4 {...props}>{children}</h4>
-    case 'h5':
-      return <h5 {...props}>{children}</h5>
-    case 'h6':
-      return <h6 {...props}>{children}</h6>
-    case 'td':
-      return <td {...props}>{children}</td>
-    case 'th':
-      return <th {...props}>{children}</th>
-    case 'a':
-      return <a {...props}>{children}</a>
-    case 'strong':
-      return <strong {...props}>{children}</strong>
-    case 'em':
-      return <em {...props}>{children}</em>
-    default:
-      return <span {...props}>{children}</span>
+function buildHighlightCandidates(source: Source | null) {
+  if (!source) {
+    return []
   }
+
+  const uniqueCandidates = new Set<string>()
+
+  for (const raw of [source.text, source.snippet]) {
+    for (const candidate of expandHighlightCandidates(raw)) {
+      uniqueCandidates.add(candidate)
+    }
+  }
+
+  return [...uniqueCandidates]
 }
 
-function renderHighlightedNode(node: ReactNode, target: string): ReactNode {
-  if (!target || node === null || node === undefined || typeof node === 'boolean') {
-    return node
+function expandHighlightCandidates(value: string | undefined) {
+  if (!value) {
+    return []
   }
 
-  if (typeof node === 'string') {
-    return renderHighlightedText(node, target)
+  const plainText = markdownToSearchText(value)
+  if (!plainText) {
+    return []
   }
 
-  if (typeof node === 'number') {
-    return renderHighlightedText(String(node), target)
-  }
+  const fragments = plainText
+    .split(/(?<=[。！？.!?])\s+|\s{2,}|\n+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 16)
+    .sort((left, right) => right.length - left.length)
 
-  if (Array.isArray(node)) {
-    return node.map((child, index) => (
-      <Fragment key={index}>{renderHighlightedNode(child, target)}</Fragment>
-    ))
-  }
-
-  if (isValidElement<{ children?: ReactNode }>(node)) {
-    const element = node as ReactElement<{ children?: ReactNode }>
-    return cloneElement(element, {
-      children: renderHighlightedNode(element.props.children, target),
-    })
-  }
-
-  return Children.map(node, (child) => renderHighlightedNode(child, target))
+  return [plainText, ...fragments.slice(0, 6)]
 }
 
-function renderHighlightedText(content: string, target: string) {
-  if (!target) {
-    return content
-  }
-
-  const normalizedTarget = target.replace(/\s+/g, ' ').trim()
-  const exactIndex = content.indexOf(target)
-  if (exactIndex >= 0) {
-    return (
-      <>
-        {content.slice(0, exactIndex)}
-        <mark className="rounded bg-amber-200 px-1 py-0.5 text-gray-900">{target}</mark>
-        {content.slice(exactIndex + target.length)}
-      </>
-    )
-  }
-
-  const normalizedContent = content.replace(/\s+/g, ' ')
-  const normalizedIndex = normalizedContent.indexOf(normalizedTarget)
-  if (normalizedIndex < 0) {
-    return content
-  }
-
-  const match = locateNormalizedSegment(content, normalizedTarget, normalizedIndex)
-  if (!match) {
-    return content
-  }
-
-  return (
-    <>
-      {content.slice(0, match.start)}
-      <mark className="rounded bg-amber-200 px-1 py-0.5 text-gray-900">{content.slice(match.start, match.end)}</mark>
-      {content.slice(match.end)}
-    </>
-  )
+function markdownToSearchText(value: string) {
+  return value
+    .replace(/```[\s\S]*?```/g, (match) => match.replace(/```/g, ' '))
+    .replace(/`([^`]+)`/g, ' $1 ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, ' $1 ')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, ' $1 ')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>+\s?/gm, '')
+    .replace(/^\s*([-*+] |\d+\.\s+)/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/[*_~]/g, '')
+    .replace(/^-{3,}$/gm, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\.{3}$/g, '')
+    .trim()
 }
 
-function locateNormalizedSegment(content: string, target: string, targetIndex: number) {
-  let normalizedCursor = 0
-  let start = -1
-  let end = -1
+function clearSourceHighlights(container: HTMLElement) {
+  const highlights = container.querySelectorAll('mark[data-source-highlight="true"]')
+  highlights.forEach((highlight) => {
+    const parent = highlight.parentNode
+    if (!parent) {
+      return
+    }
 
-  for (let index = 0; index < content.length; index += 1) {
-    if (/\s/.test(content[index])) {
+    parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight)
+    parent.normalize()
+  })
+}
+
+function highlightSourceInContainer(container: HTMLElement, candidates: string[]) {
+  for (const candidate of candidates) {
+    const marks = highlightSingleCandidate(container, candidate)
+    if (marks.length > 0) {
+      return marks
+    }
+  }
+
+  return [] as HTMLElement[]
+}
+
+function highlightSingleCandidate(container: HTMLElement, candidate: string) {
+  const textNodes = collectTextNodes(container)
+  if (textNodes.length === 0) {
+    return [] as HTMLElement[]
+  }
+
+  const aggregateModel = buildAggregateTextModel(textNodes)
+  const aggregateMatch = locateNormalizedMatch(aggregateModel.text, candidate)
+  if (!aggregateMatch) {
+    return [] as HTMLElement[]
+  }
+
+  const marks: HTMLElement[] = []
+
+  for (const segment of aggregateModel.segments) {
+    const matchStart = Math.max(segment.start, aggregateMatch.start)
+    const matchEnd = Math.min(segment.end, aggregateMatch.end)
+    if (matchStart >= matchEnd) {
       continue
     }
 
-    if (normalizedCursor === targetIndex) {
-      start = index
-    }
-
-    normalizedCursor += 1
-
-    if (start >= 0 && normalizedCursor >= targetIndex + target.replace(/\s+/g, '').length) {
-      end = index + 1
-      break
+    const mark = wrapTextNodeRange(segment.node, matchStart - segment.start, matchEnd - segment.start)
+    if (mark) {
+      marks.push(mark)
     }
   }
 
-  if (start < 0 || end < 0) {
+  return marks
+}
+
+function collectTextNodes(container: HTMLElement) {
+  const textNodes: Text[] = []
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parentElement = node.parentElement
+      if (!parentElement) {
+        return NodeFilter.FILTER_REJECT
+      }
+
+      if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parentElement.tagName)) {
+        return NodeFilter.FILTER_REJECT
+      }
+
+      if (!node.textContent?.trim()) {
+        return NodeFilter.FILTER_SKIP
+      }
+
+      return NodeFilter.FILTER_ACCEPT
+    },
+  })
+
+  let currentNode = walker.nextNode()
+  while (currentNode) {
+    textNodes.push(currentNode as Text)
+    currentNode = walker.nextNode()
+  }
+
+  return textNodes
+}
+
+function buildAggregateTextModel(textNodes: Text[]) {
+  const segments: Array<{ node: Text; start: number; end: number }> = []
+  let text = ''
+  let cursor = 0
+
+  textNodes.forEach((node, index) => {
+    const value = node.textContent || ''
+    const start = cursor
+    const end = start + value.length
+
+    segments.push({ node, start, end })
+    text += value
+    cursor = end
+
+    if (index < textNodes.length - 1) {
+      text += ' '
+      cursor += 1
+    }
+  })
+
+  return {
+    text,
+    segments,
+  }
+}
+
+function locateNormalizedMatch(content: string, target: string) {
+  const normalizedContent = normalizeForSearch(content)
+  const normalizedTarget = normalizeForSearch(target)
+  if (!normalizedContent.text || !normalizedTarget.text) {
+    return null
+  }
+
+  const startIndex = normalizedContent.text.indexOf(normalizedTarget.text)
+  if (startIndex < 0) {
+    return null
+  }
+
+  const endIndex = startIndex + normalizedTarget.text.length - 1
+  const start = normalizedContent.map[startIndex]
+  const end = normalizedContent.map[endIndex] + 1
+  if (start === undefined || end === undefined) {
     return null
   }
 
   return { start, end }
+}
+
+function normalizeForSearch(value: string) {
+  const text = markdownToSearchText(value)
+  const chars: string[] = []
+  const map: number[] = []
+  let previousWasSpace = true
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (/\s/.test(char)) {
+      if (!previousWasSpace && chars.length > 0) {
+        chars.push(' ')
+        map.push(index)
+      }
+      previousWasSpace = true
+      continue
+    }
+
+    chars.push(char.toLocaleLowerCase())
+    map.push(index)
+    previousWasSpace = false
+  }
+
+  while (chars.length > 0 && chars[chars.length - 1] === ' ') {
+    chars.pop()
+    map.pop()
+  }
+
+  return {
+    text: chars.join(''),
+    map,
+  }
+}
+
+function wrapTextNodeRange(node: Text, startOffset: number, endOffset: number) {
+  if (startOffset >= endOffset || !node.parentNode) {
+    return null
+  }
+
+  const matchedNode = startOffset > 0 ? node.splitText(startOffset) : node
+  const tailNode = matchedNode.splitText(endOffset - startOffset)
+  const mark = document.createElement('mark')
+  mark.dataset.sourceHighlight = 'true'
+  mark.className = 'rounded bg-amber-200 px-1 py-0.5 text-gray-900 shadow-sm shadow-amber-100'
+  matchedNode.parentNode?.insertBefore(mark, matchedNode)
+  mark.appendChild(matchedNode)
+
+  if (!tailNode.textContent) {
+    tailNode.remove()
+  }
+
+  return mark
+}
+
+function scrollToHighlight(element: HTMLElement) {
+  const scrollContainer = element.closest<HTMLElement>('[data-source-scroll-container="true"]')
+
+  if (scrollContainer) {
+    const containerRect = scrollContainer.getBoundingClientRect()
+    const elementRect = element.getBoundingClientRect()
+    const targetTop =
+      scrollContainer.scrollTop +
+      (elementRect.top - containerRect.top) -
+      scrollContainer.clientHeight / 2 +
+      elementRect.height / 2
+
+    scrollContainer.scrollTop = Math.max(0, targetTop)
+  } else {
+    element.scrollIntoView({
+      behavior: 'auto',
+      block: 'center',
+      inline: 'nearest',
+    })
+  }
+
+  element.animate(
+    [
+      { backgroundColor: 'rgba(253, 230, 138, 0.95)' },
+      { backgroundColor: 'rgba(252, 211, 77, 0.75)' },
+      { backgroundColor: 'rgba(253, 230, 138, 0.95)' },
+    ],
+    {
+      duration: 1400,
+      easing: 'ease-out',
+    }
+  )
 }

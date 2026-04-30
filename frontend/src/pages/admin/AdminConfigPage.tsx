@@ -8,6 +8,12 @@ import { configApi } from '@/services/api'
 import type { SystemConfig } from '@/types'
 import { Save, RotateCcw } from 'lucide-react'
 
+const CACHE_LEVEL_OPTIONS: Array<{ value: SystemConfig['cacheLevels'][number]; label: string }> = [
+  { value: 'memory', label: '内存缓存' },
+  { value: 'redis', label: 'Redis缓存' },
+  { value: 'disk', label: '磁盘缓存' },
+]
+
 export function AdminConfigPage() {
   const [config, setConfig] = useState<SystemConfig | null>(null)
   const [loading, setLoading] = useState(false)
@@ -33,7 +39,8 @@ export function AdminConfigPage() {
     if (!config) return
     setSaving(true)
     try {
-      await configApi.update(config)
+      const data = await configApi.update(config)
+      setConfig(data)
       alert('保存成功')
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '保存失败')
@@ -89,17 +96,19 @@ export function AdminConfigPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">默认分块策略</label>
+              <label htmlFor="default-chunking-strategy" className="block text-sm font-medium text-gray-700 mb-1">默认分块策略</label>
               <select
+                id="default-chunking-strategy"
                 className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={config?.chunkingStrategy || 'fixed'}
-                onChange={e => updateField('chunkingStrategy', e.target.value)}
+                value={config?.chunkingStrategy || 'Character'}
+                onChange={e => updateField('chunkingStrategy', e.target.value as SystemConfig['chunkingStrategy'])}
               >
-                <option value="fixed">固定长度分块</option>
-                <option value="semantic">语义分块</option>
-                <option value="recursive">递归分块</option>
-                <option value="moe">MoE 智能分块</option>
+                <option value="Character">字符分块</option>
+                <option value="MoE">MoE 智能分块</option>
               </select>
+              <p className="mt-2 text-xs text-gray-500">
+                当上传文档或重新解析时选择“自动”，系统会优先使用这里的默认分块策略。
+              </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -140,22 +149,20 @@ export function AdminConfigPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">缓存层级</label>
               <div className="flex gap-2">
-                {['memory', 'redis', 'disk'].map(level => (
-                  <label key={level} className="flex items-center gap-1.5 text-sm text-gray-700 px-3 py-2 rounded-lg border border-gray-200">
+                {CACHE_LEVEL_OPTIONS.map(level => (
+                  <label key={level.value} className="flex items-center gap-1.5 text-sm text-gray-700 px-3 py-2 rounded-lg border border-gray-200">
                     <input
                       type="checkbox"
-                      checked={config?.cacheLevels?.includes(level) ?? false}
+                      checked={config?.cacheLevels?.includes(level.value) ?? false}
                       onChange={e => {
-                        const levels = new Set(config?.cacheLevels || [])
-                        if (e.target.checked) levels.add(level)
-                        else levels.delete(level)
+                        const levels = new Set<SystemConfig['cacheLevels'][number]>(config?.cacheLevels || [])
+                        if (e.target.checked) levels.add(level.value)
+                        else levels.delete(level.value)
                         updateField('cacheLevels', Array.from(levels))
                       }}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    {level === 'memory' && '内存缓存'}
-                    {level === 'redis' && 'Redis缓存'}
-                    {level === 'disk' && '磁盘缓存'}
+                    {level.label}
                   </label>
                 ))}
               </div>

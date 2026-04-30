@@ -478,11 +478,11 @@ export interface ModelFormData {
 
 // === Config Types ===
 export interface SystemConfig {
-  chunkingStrategy: string
+  chunkingStrategy: 'Character' | 'MoE'
   chunkSize: number
   chunkOverlap: number
   embeddingDimension: number
-  cacheLevels: string[]
+  cacheLevels: Array<'memory' | 'redis' | 'disk'>
   cacheTtlSeconds: number
   systemPromptTemplate: string
 }

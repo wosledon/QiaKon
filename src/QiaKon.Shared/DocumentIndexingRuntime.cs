@@ -16,6 +16,8 @@ namespace QiaKon.Shared;
 internal sealed class DocumentIndexingRuntime
 {
     private const string CollectionName = "rag_documents";
+    private const string MoeChunkingStrategyName = "MoE";
+    private const string CharacterChunkingStrategyName = "Character";
 
     private readonly QiaKonAppDbContext _dbContext;
     private readonly IHostEnvironment _hostEnvironment;
@@ -194,19 +196,26 @@ internal sealed class DocumentIndexingRuntime
 
     private string ResolveChunkingStrategy(DocumentRow document, string? requestedChunkingStrategy)
     {
-        if (!string.IsNullOrWhiteSpace(requestedChunkingStrategy))
+        var normalizedRequested = NormalizeChunkingStrategy(requestedChunkingStrategy);
+        if (normalizedRequested is not null)
         {
-            return requestedChunkingStrategy;
+            return normalizedRequested;
         }
 
         var metadata = PostgresDocumentService.ParseJson(document.MetadataJson);
-        var stored = metadata?["chunkingStrategy"]?.GetValue<string>();
-        if (!string.IsNullOrWhiteSpace(stored))
+        var stored = NormalizeChunkingStrategy(metadata?["chunkingStrategy"]?.GetValue<string>());
+        if (stored is not null)
         {
             return stored;
         }
 
-        return _modelResolver.TryGetDefaultChunkingModel() is not null ? "MoE" : "Character";
+        var configuredDefault = GetConfiguredDefaultChunkingStrategy();
+        if (configuredDefault is not null)
+        {
+            return configuredDefault;
+        }
+
+        return _modelResolver.TryGetDefaultChunkingModel() is not null ? MoeChunkingStrategyName : CharacterChunkingStrategyName;
     }
 
     private void UpsertChunkingMetadata(DocumentRow document, string chunkingStrategy)
@@ -222,7 +231,7 @@ internal sealed class DocumentIndexingRuntime
         string chunkingStrategy,
         CancellationToken cancellationToken)
     {
-        if (string.Equals(chunkingStrategy, "moe", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(chunkingStrategy, MoeChunkingStrategyName, StringComparison.OrdinalIgnoreCase))
         {
             var chunkingModel = _modelResolver.TryGetDefaultChunkingModel();
             if (chunkingModel is null)
@@ -245,6 +254,32 @@ internal sealed class DocumentIndexingRuntime
         }
 
         return await _characterChunkingStrategy.ChunkAsync(documentId, content, cancellationToken);
+    }
+
+    private string? GetConfiguredDefaultChunkingStrategy()
+    {
+        var configured = _dbContext.SystemConfigs
+            .AsNoTracking()
+            .Select(x => x.DefaultChunkingStrategy)
+            .FirstOrDefault();
+
+        return NormalizeChunkingStrategy(configured);
+    }
+
+    private string? NormalizeChunkingStrategy(string? chunkingStrategy)
+    {
+        if (string.IsNullOrWhiteSpace(chunkingStrategy))
+        {
+            return null;
+        }
+
+        return chunkingStrategy.Trim().ToLowerInvariant() switch
+        {
+            "auto" or "default" or "inherit" => null,
+            "moe" or "semantic" => MoeChunkingStrategyName,
+            "character" or "fixed" or "recursive" or "recursivecharactertextsplitter" => CharacterChunkingStrategyName,
+            _ => CharacterChunkingStrategyName
+        };
     }
 
     private async Task UpsertVectorsAsync(

@@ -85,6 +85,16 @@ interface BackendDocumentDetail {
   chunks?: BackendChunkInfo[]
 }
 
+interface BackendSystemConfig {
+  defaultChunkingStrategy: string
+  chunkSize: number
+  chunkOverlap: number
+  defaultVectorDimensions: number
+  cacheStrategy: string
+  cacheExpirationMinutes: number
+  promptTemplate: string
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
 function getToken(): string | null {
@@ -356,6 +366,63 @@ function toNumber(value: unknown) {
 
   const parsed = Number(value ?? 0)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeConfigChunkingStrategy(value?: string): SystemConfig['chunkingStrategy'] {
+  switch (value?.trim().toLowerCase()) {
+    case 'moe':
+    case 'semantic':
+      return 'MoE'
+    default:
+      return 'Character'
+  }
+}
+
+function parseCacheLevels(value?: string): SystemConfig['cacheLevels'] {
+  const normalized = value?.toLowerCase() ?? ''
+  const levels: SystemConfig['cacheLevels'] = []
+
+  if (normalized.includes('l1') || normalized.includes('memory')) levels.push('memory')
+  if (normalized.includes('l2') || normalized.includes('redis')) levels.push('redis')
+  if (normalized.includes('l3') || normalized.includes('disk')) levels.push('disk')
+
+  return levels
+}
+
+function formatCacheStrategy(levels: SystemConfig['cacheLevels']): string {
+  const mapped = [
+    levels.includes('memory') ? 'L1' : null,
+    levels.includes('redis') ? 'L2' : null,
+    levels.includes('disk') ? 'L3' : null,
+  ].filter(Boolean)
+
+  return mapped.length > 0 ? mapped.join('+') : 'L1'
+}
+
+function toFrontendSystemConfig(data: BackendSystemConfig): SystemConfig {
+  return {
+    chunkingStrategy: normalizeConfigChunkingStrategy(data.defaultChunkingStrategy),
+    chunkSize: data.chunkSize,
+    chunkOverlap: data.chunkOverlap,
+    embeddingDimension: data.defaultVectorDimensions,
+    cacheLevels: parseCacheLevels(data.cacheStrategy),
+    cacheTtlSeconds: data.cacheExpirationMinutes * 60,
+    systemPromptTemplate: data.promptTemplate,
+  }
+}
+
+function toBackendSystemConfig(data: Partial<SystemConfig>): Partial<BackendSystemConfig> {
+  const result: Partial<BackendSystemConfig> = {}
+
+  if (data.chunkingStrategy !== undefined) result.defaultChunkingStrategy = data.chunkingStrategy
+  if (data.chunkSize !== undefined) result.chunkSize = data.chunkSize
+  if (data.chunkOverlap !== undefined) result.chunkOverlap = data.chunkOverlap
+  if (data.embeddingDimension !== undefined) result.defaultVectorDimensions = data.embeddingDimension
+  if (data.cacheLevels !== undefined) result.cacheStrategy = formatCacheStrategy(data.cacheLevels)
+  if (data.cacheTtlSeconds !== undefined) result.cacheExpirationMinutes = Math.max(1, Math.ceil(data.cacheTtlSeconds / 60))
+  if (data.systemPromptTemplate !== undefined) result.promptTemplate = data.systemPromptTemplate
+
+  return result
 }
 
 // History API
@@ -636,9 +703,9 @@ export const llmModelsApi = {
 
 // Config API
 export const configApi = {
-  get: () => apiGet<SystemConfig>('/admin/config'),
-  update: (data: Partial<SystemConfig>) => apiPut<SystemConfig>('/admin/config', data),
-  reset: () => apiPost<SystemConfig>('/admin/config/reset', {}),
+  get: async () => toFrontendSystemConfig(await apiGet<BackendSystemConfig>('/admin/config')),
+  update: async (data: Partial<SystemConfig>) => toFrontendSystemConfig(await apiPut<BackendSystemConfig>('/admin/config', toBackendSystemConfig(data))),
+  reset: async () => toFrontendSystemConfig(await apiPost<BackendSystemConfig>('/admin/config/reset', {})),
 }
 
 // Connectors API

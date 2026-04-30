@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react'
+import { ChevronDown, ChevronRight, BrainCircuit, ExternalLink } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Source } from '@/types'
+import { SourceDocumentDrawer } from '@/components/chat/SourceDocumentDrawer'
 
 interface ChatMessageBubbleProps {
   role: 'user' | 'assistant'
@@ -21,6 +22,7 @@ export function ChatMessageBubble({
 }: ChatMessageBubbleProps) {
   const isUser = role === 'user'
   const [thoughtExpanded, setThoughtExpanded] = useState(false)
+  const [selectedSource, setSelectedSource] = useState<Source | null>(null)
   const parsedContent = useMemo(() => parseAssistantContent(content), [content])
   const hasThought = !isUser && parsedContent.thought.trim().length > 0
   const answerContent = isUser ? content : parsedContent.answer
@@ -102,18 +104,32 @@ export function ChatMessageBubble({
             <p className="mb-2 text-xs font-medium text-gray-500">参考来源</p>
             <div className="space-y-2">
               {sources.map((source, index) => (
-                <div key={`${source.documentId}-${index}`} className="rounded-lg bg-gray-50 px-3 py-2">
+                <button
+                  type="button"
+                  key={`${source.documentId}-${index}`}
+                  onClick={() => setSelectedSource(source)}
+                  className="w-full rounded-lg bg-gray-50 px-3 py-2 text-left transition hover:bg-blue-50"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-xs font-semibold text-gray-700">{source.title}</span>
-                    <span className="shrink-0 text-[10px] text-gray-400">{(source.score * 100).toFixed(1)}%</span>
+                    <span className="inline-flex items-center gap-1 shrink-0 text-[10px] text-gray-400">
+                      {(source.score * 100).toFixed(1)}%
+                      <ExternalLink className="h-3 w-3" />
+                    </span>
                   </div>
                   <p className="mt-1 text-xs leading-5 text-gray-500">{source.snippet}</p>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      <SourceDocumentDrawer
+        open={selectedSource !== null}
+        source={selectedSource}
+        onClose={() => setSelectedSource(null)}
+      />
     </div>
   )
 }

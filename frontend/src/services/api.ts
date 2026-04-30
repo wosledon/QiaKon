@@ -396,7 +396,7 @@ function buildQuery(params: Record<string, unknown>): string {
 
 export const graphApi = {
   overview: () => apiGet<GraphOverview>('/graphs'),
-  preview: () => apiGet<GraphPreviewData>('/graphs/preview?limit=24'),
+  preview: (limit = 120) => apiGet<GraphPreviewData>(`/graphs/preview?limit=${limit}`),
   entityTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/entity-types'),
   relationTypes: () => apiGet<GraphTypeDistribution[]>('/graphs/stats/relation-types'),
 

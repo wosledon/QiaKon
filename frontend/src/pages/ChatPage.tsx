@@ -286,24 +286,45 @@ export function ChatPage() {
               </Button>
             </div>
 
-            <label className="inline-flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={enableThinking}
-                onChange={(e) => setEnableThinking(e.target.checked)}
-                disabled={isLoading}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
+            <button
+              type="button"
+              onClick={() => setEnableThinking((prev) => !prev)}
+              disabled={isLoading}
+              className={[
+                'inline-flex items-start gap-3 rounded-xl border px-3 py-2 text-left text-sm transition-all',
+                enableThinking
+                  ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100',
+                isLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              ].join(' ')}
+            >
+              <span className={[
+                'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border',
+                enableThinking ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 bg-white text-transparent',
+              ].join(' ')}>
+                <span className="text-[11px]">✓</span>
+              </span>
               <span className="space-y-1">
-                <span className="flex items-center gap-2 font-medium text-gray-800">
-                  <BrainCircuit className="h-4 w-4 text-blue-600" />
+                <span className={[
+                  'flex items-center gap-2 font-medium',
+                  enableThinking ? 'text-blue-800' : 'text-gray-800',
+                ].join(' ')}>
+                  <BrainCircuit className={enableThinking ? 'h-4 w-4 text-blue-600' : 'h-4 w-4 text-gray-500'} />
                   深度思考
+                  {enableThinking && (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      已开启
+                    </span>
+                  )}
                 </span>
-                <span className="block text-xs text-gray-500">
+                <span className={[
+                  'block text-xs',
+                  enableThinking ? 'text-blue-700/90' : 'text-gray-500',
+                ].join(' ')}>
                   开启后，会要求模型使用 <code className="rounded bg-white px-1 py-0.5">&lt;think&gt;</code> 输出思考过程；思考内容默认折叠展示。
                 </span>
               </span>
-            </label>
+            </button>
           </form>
         </div>
       </div>

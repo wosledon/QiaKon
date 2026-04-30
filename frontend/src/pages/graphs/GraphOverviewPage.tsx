@@ -21,6 +21,8 @@ import type {
 } from '@/types'
 import { GraphPreview } from '@/components/graphs/GraphPreview'
 
+const GRAPH_PREVIEW_LIMIT = 120
+
 export function GraphOverviewPage() {
   const [overview, setOverview] = useState<GraphOverview | null>(null)
   const [previewData, setPreviewData] = useState<GraphPreviewData | null>(null)
@@ -42,7 +44,7 @@ export function GraphOverviewPage() {
     try {
       const [ov, pv, et, rt] = await Promise.all([
         graphApi.overview(),
-        graphApi.preview(),
+        graphApi.preview(GRAPH_PREVIEW_LIMIT),
         graphApi.entityTypes(),
         graphApi.relationTypes(),
       ])
@@ -156,7 +158,7 @@ export function GraphOverviewPage() {
                 />
                 <p className="text-center text-xs text-gray-400 mt-2 flex items-center justify-center gap-1">
                   <MousePointerClick className="w-3 h-3" />
-                  点击节点查看详情，悬停高亮关联
+                  点击节点查看详情，悬停高亮关联；预览会优先展示高连接度且相互关联的节点
                 </p>
               </div>
               {selectedNode && (

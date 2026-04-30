@@ -635,37 +635,89 @@ public sealed class MemoryGraphService : IGraphService
     /// </summary>
     public GraphPreviewResultDto GetPreview(int limit = 100)
     {
-        // 计算每个实体的度数（连接数）
+        limit = Math.Clamp(limit, 1, Math.Max(_entities.Count, 1));
+
         var entityDegrees = new Dictionary<string, int>();
         foreach (var entity in _entities.Keys)
         {
             entityDegrees[entity] = _relations.Values.Count(r => r.SourceId == entity || r.TargetId == entity);
         }
 
-        // 获取前 limit 个度数最高的实体
-        var topEntities = _entities.Values
-            .OrderByDescending(e => entityDegrees.GetValueOrDefault(e.Id, 0))
-            .Take(limit)
+        var adjacency = _entities.Keys.ToDictionary(entityId => entityId, _ => new HashSet<string>());
+        foreach (var relation in _relations.Values)
+        {
+            adjacency[relation.SourceId].Add(relation.TargetId);
+            adjacency[relation.TargetId].Add(relation.SourceId);
+        }
+
+        var orderedEntityIds = _entities.Keys
+            .OrderByDescending(entityId => entityDegrees.GetValueOrDefault(entityId, 0))
+            .ThenBy(entityId => _entities[entityId].Name)
             .ToList();
 
-        var topEntityIds = new HashSet<string>(topEntities.Select(e => e.Id));
+        var selectedEntityIds = new List<string>(limit);
+        var visited = new HashSet<string>();
 
-        // 仅返回预览节点之间的边，避免前端拿到指向不可见节点的悬空边
+        foreach (var seedId in orderedEntityIds)
+        {
+            if (selectedEntityIds.Count >= limit)
+            {
+                break;
+            }
+
+            if (!visited.Add(seedId))
+            {
+                continue;
+            }
+
+            var queue = new Queue<string>();
+            queue.Enqueue(seedId);
+
+            while (queue.Count > 0 && selectedEntityIds.Count < limit)
+            {
+                var currentId = queue.Dequeue();
+                selectedEntityIds.Add(currentId);
+
+                foreach (var neighborId in adjacency[currentId]
+                    .OrderByDescending(entityId => entityDegrees.GetValueOrDefault(entityId, 0))
+                    .ThenBy(entityId => _entities[entityId].Name))
+                {
+                    if (visited.Add(neighborId))
+                    {
+                        queue.Enqueue(neighborId);
+                    }
+                }
+            }
+        }
+
+        foreach (var entityId in orderedEntityIds)
+        {
+            if (selectedEntityIds.Count >= limit)
+            {
+                break;
+            }
+
+            if (!selectedEntityIds.Contains(entityId))
+            {
+                selectedEntityIds.Add(entityId);
+            }
+        }
+
+        var topEntityIds = new HashSet<string>(selectedEntityIds);
+
         var relevantRelations = _relations.Values
             .Where(r => topEntityIds.Contains(r.SourceId) && topEntityIds.Contains(r.TargetId))
             .ToList();
 
-        // 构建节点列表
-        var nodes = topEntities.Select(e => new GraphPreviewNodeDto(
-            e.Id,
-            e.Name,
-            e.Type,
-            _departments.GetValueOrDefault(e.DepartmentId, "未知部门"),
-            e.IsPublic,
-            entityDegrees.GetValueOrDefault(e.Id, 0)
+        var nodes = selectedEntityIds.Select(entityId => _entities[entityId]).Select(entity => new GraphPreviewNodeDto(
+            entity.Id,
+            entity.Name,
+            entity.Type,
+            _departments.GetValueOrDefault(entity.DepartmentId, "未知部门"),
+            entity.IsPublic,
+            entityDegrees.GetValueOrDefault(entity.Id, 0)
         )).ToList();
 
-        // 构建边列表
         var edges = relevantRelations.Select(r => new GraphPreviewEdgeDto(
             r.Id,
             r.SourceId,

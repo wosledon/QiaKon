@@ -516,29 +516,86 @@ internal sealed class PostgresGraphService : IGraphService
     public GraphPreviewResultDto GetPreview(int limit = 100)
     {
         var snapshot = LoadSnapshot();
+        limit = Math.Clamp(limit, 1, Math.Max(snapshot.Entities.Count, 1));
         var entityDegrees = snapshot.Entities.Keys.ToDictionary(
             key => key,
             key => snapshot.Relations.Values.Count(r => r.SourceId == key || r.TargetId == key));
 
-        var topEntities = snapshot.Entities.Values
-            .OrderByDescending(e => entityDegrees.GetValueOrDefault(e.Id, 0))
-            .Take(limit)
+        var adjacency = snapshot.Entities.Keys.ToDictionary(key => key, _ => new HashSet<string>());
+        foreach (var relation in snapshot.Relations.Values)
+        {
+            adjacency[relation.SourceId].Add(relation.TargetId);
+            adjacency[relation.TargetId].Add(relation.SourceId);
+        }
+
+        var orderedEntityIds = snapshot.Entities.Keys
+            .OrderByDescending(id => entityDegrees.GetValueOrDefault(id, 0))
+            .ThenBy(id => snapshot.Entities[id].Name)
             .ToList();
 
-        var topEntityIds = topEntities.Select(e => e.Id).ToHashSet();
+        var selectedEntityIds = new List<string>(limit);
+        var visited = new HashSet<string>();
+
+        foreach (var seedId in orderedEntityIds)
+        {
+            if (selectedEntityIds.Count >= limit)
+            {
+                break;
+            }
+
+            if (!visited.Add(seedId))
+            {
+                continue;
+            }
+
+            var queue = new Queue<string>();
+            queue.Enqueue(seedId);
+
+            while (queue.Count > 0 && selectedEntityIds.Count < limit)
+            {
+                var currentId = queue.Dequeue();
+                selectedEntityIds.Add(currentId);
+
+                foreach (var neighborId in adjacency[currentId]
+                    .OrderByDescending(id => entityDegrees.GetValueOrDefault(id, 0))
+                    .ThenBy(id => snapshot.Entities[id].Name))
+                {
+                    if (visited.Add(neighborId))
+                    {
+                        queue.Enqueue(neighborId);
+                    }
+                }
+            }
+        }
+
+        foreach (var entityId in orderedEntityIds)
+        {
+            if (selectedEntityIds.Count >= limit)
+            {
+                break;
+            }
+
+            if (!selectedEntityIds.Contains(entityId))
+            {
+                selectedEntityIds.Add(entityId);
+            }
+        }
+
+        var topEntityIds = selectedEntityIds.ToHashSet();
         var edges = snapshot.Relations.Values
             .Where(r => topEntityIds.Contains(r.SourceId) && topEntityIds.Contains(r.TargetId))
             .Select(r => new GraphPreviewEdgeDto(r.Id, r.SourceId, r.TargetId, r.Type))
             .ToList();
 
-        var nodes = topEntities
-            .Select(e => new GraphPreviewNodeDto(
-                e.Id,
-                e.Name,
-                e.Type,
-                ResolveDepartmentName(e.DepartmentId),
-                e.IsPublic,
-                entityDegrees.GetValueOrDefault(e.Id, 0)))
+        var nodes = selectedEntityIds
+            .Select(id => snapshot.Entities[id])
+            .Select(entity => new GraphPreviewNodeDto(
+                entity.Id,
+                entity.Name,
+                entity.Type,
+                ResolveDepartmentName(entity.DepartmentId),
+                entity.IsPublic,
+                entityDegrees.GetValueOrDefault(entity.Id, 0)))
             .ToList();
 
         return new GraphPreviewResultDto(nodes, edges, snapshot.Entities.Count, snapshot.Relations.Count);

@@ -150,10 +150,10 @@ export function ConversationHistoryPanel({
             size="sm"
             className="w-full px-0"
             onClick={fetchHistory}
-            isLoading={loading}
+            disabled={loading}
             title="刷新历史记录"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
           </Button>
         </div>
       </div>
@@ -170,8 +170,8 @@ export function ConversationHistoryPanel({
               <p className="mt-1 text-xs text-gray-500">左侧快速切换，右侧继续聊天</p>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={fetchHistory} isLoading={loading} title="刷新历史记录">
-                <RefreshCw className="h-4 w-4" />
+              <Button variant="ghost" size="sm" onClick={fetchHistory} disabled={loading} title="刷新历史记录">
+                <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
               </Button>
               <Button variant="ghost" size="sm" onClick={onToggleCollapse} title="收起历史栏">
                 <ChevronLeft className="h-4 w-4" />
@@ -203,8 +203,8 @@ export function ConversationHistoryPanel({
                 <Search className="mr-2 h-4 w-4" />
                 搜索
               </Button>
-              <Button variant="ghost" size="sm" onClick={fetchHistory} isLoading={loading} title="刷新历史记录">
-                <RefreshCw className="h-4 w-4" />
+              <Button variant="ghost" size="sm" onClick={fetchHistory} disabled={loading} title="刷新历史记录">
+                <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
               </Button>
             </div>
           ) : null}

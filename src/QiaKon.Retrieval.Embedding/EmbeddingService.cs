@@ -12,11 +12,12 @@ namespace QiaKon.Retrieval.Embedding;
 /// </summary>
 public sealed class LocalEmbeddingService : IEmbeddingService, IDisposable
 {
-    private readonly InferenceSession _session;
+    private readonly InferenceSession? _session;
     private readonly EmbeddingOptions _options;
     private readonly ILogger<LocalEmbeddingService>? _logger;
     private readonly ConcurrentDictionary<string, ReadOnlyMemory<float>> _cache = new();
     private readonly QwenTokenizer? _tokenizer;
+    private readonly bool _useFallbackEmbeddings;
 
     public int Dimensions => _options.Dimensions;
     public string ModelName => _options.ModelName;
@@ -33,25 +34,39 @@ public sealed class LocalEmbeddingService : IEmbeddingService, IDisposable
         {
             var onnxFiles = Directory.GetFiles(modelPath, "*.onnx");
             if (onnxFiles.Length == 0)
-                throw new FileNotFoundException($"在文件夹 {modelPath} 中未找到 ONNX 模型文件");
+            {
+                _useFallbackEmbeddings = true;
+                _logger?.LogWarning("在文件夹 {ModelPath} 中未找到 ONNX 模型文件，将自动退化为本地哈希嵌入。", modelPath);
+                return;
+            }
             modelPath = onnxFiles[0];
         }
         else if (!File.Exists(modelPath))
         {
-            throw new FileNotFoundException($"ONNX 模型未找到: {modelPath}");
+            _useFallbackEmbeddings = true;
+            _logger?.LogWarning("未找到 ONNX 模型 {ModelPath}，将自动退化为本地哈希嵌入。", modelPath);
+            return;
         }
 
-        var sessionOptions = new SessionOptions();
-        sessionOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        try
+        {
+            var sessionOptions = new SessionOptions();
+            sessionOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
 
-        _session = new InferenceSession(modelPath, sessionOptions);
+            _session = new InferenceSession(modelPath, sessionOptions);
 
-        // 加载 tokenizer 文件
-        var modelDir = Path.GetDirectoryName(modelPath) ?? "";
-        _tokenizer = QwenTokenizer.TryLoad(modelDir);
+            // 加载 tokenizer 文件
+            var modelDir = Path.GetDirectoryName(modelPath) ?? "";
+            _tokenizer = QwenTokenizer.TryLoad(modelDir);
 
-        _logger?.LogInformation("LocalEmbeddingService 初始化完成，模型: {ModelPath}, 维度: {Dimensions}",
-            modelPath, _options.Dimensions);
+            _logger?.LogInformation("LocalEmbeddingService 初始化完成，模型: {ModelPath}, 维度: {Dimensions}",
+                modelPath, _options.Dimensions);
+        }
+        catch (Exception ex)
+        {
+            _useFallbackEmbeddings = true;
+            _logger?.LogWarning(ex, "本地 ONNX 嵌入模型初始化失败，将自动退化为本地哈希嵌入。ModelPath={ModelPath}", modelPath);
+        }
     }
 
     /// <inheritdoc />
@@ -85,6 +100,11 @@ public sealed class LocalEmbeddingService : IEmbeddingService, IDisposable
 
     private ReadOnlyMemory<float> ComputeEmbedding(string text)
     {
+        if (_useFallbackEmbeddings || _session is null)
+        {
+            return new ReadOnlyMemory<float>(ComputeFallbackEmbedding(text));
+        }
+
         var (inputIds, attentionMask) = _tokenizer?.Tokenize(text, _options.MaxSequenceLength)
             ?? SimpleTokenize(text, _options.MaxSequenceLength);
 
@@ -198,9 +218,27 @@ public sealed class LocalEmbeddingService : IEmbeddingService, IDisposable
         }
     }
 
+    private float[] ComputeFallbackEmbedding(string text)
+    {
+        var vector = new float[_options.Dimensions];
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return vector;
+        }
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var bucket = Math.Abs(HashCode.Combine(text[i], i)) % vector.Length;
+            vector[bucket] += 1f + ((i % 7) * 0.01f);
+        }
+
+        Normalize(vector);
+        return vector;
+    }
+
     public void Dispose()
     {
-        _session.Dispose();
+        _session?.Dispose();
     }
 }
 

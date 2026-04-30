@@ -304,6 +304,11 @@ export function DetailPage() {
                         <StatusBadge status={chunk.status}>
                           {statusLabelMap[chunk.status] || chunk.status}
                         </StatusBadge>
+                        {chunk.chunkingStrategy && (
+                          <span className="text-xs rounded bg-blue-50 px-2 py-0.5 text-blue-600">
+                            {chunk.chunkingStrategy}
+                          </span>
+                        )}
                         {chunk.vectorDimension && (
                           <span className="text-xs text-gray-500">
                             {chunk.vectorDimension} 维

@@ -23,6 +23,15 @@
     <ProjectReference Include="..\QiaKon.Contracts\QiaKon.Contracts.csproj" />
     <ProjectReference
       Include="..\QiaKon.EntityFrameworkCore.Npgsql\QiaKon.EntityFrameworkCore.Npgsql.csproj" />
+    <ProjectReference Include="..\QiaKon.Llm\QiaKon.Llm.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval\QiaKon.Retrieval.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.Chunnking\QiaKon.Retrieval.Chunnking.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.Retrieval.Chunnking.MoE\QiaKon.Retrieval.Chunnking.MoE.csproj" />
+    <ProjectReference
+      Include="..\QiaKon.Retrieval.DocumentProcessor\QiaKon.Retrieval.DocumentProcessor.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.Embedding\QiaKon.Retrieval.Embedding.csproj" />
+    <ProjectReference Include="..\QiaKon.Retrieval.VectorStore\QiaKon.Retrieval.VectorStore.csproj" />
   </ItemGroup>
 
 </Project>

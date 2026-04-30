@@ -35,7 +35,8 @@ public sealed record RetrieveResponseDto(
 public sealed record RagChatRequestDto(
     string Query,
     Guid? ConversationId = null,
-    int TopK = 5);
+    int TopK = 5,
+    Guid? ModelId = null);
 
 /// <summary>
 /// RAG问答来源

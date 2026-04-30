@@ -63,12 +63,14 @@ public static class ServiceCollectionExtensions
         // Core services backed by PostgreSQL
         services.AddScoped<IDocumentService, PostgresDocumentService>();
         services.AddScoped<IGraphService, PostgresGraphService>();
+        services.AddScoped<DocumentIndexingRuntime>();
         services.AddScoped<IDashboardService, MemoryDashboardService>();
         services.AddScoped<IGraphOverviewService, MemoryGraphOverviewService>();
 
         // Keep low-risk auxiliary services in memory for now
         services.AddSingleton<IAuthService, MemoryAuthService>();
-        services.AddSingleton<IRagService, MemoryRagService>();
+        services.AddSingleton<ConfiguredLlmModelResolver>();
+        services.AddSingleton<IRagService, PostgresRagService>();
         services.AddSingleton<IDepartmentService, MemoryDepartmentService>();
         services.AddSingleton<IRoleService, MemoryRoleService>();
         services.AddSingleton<IUserService, MemoryUserService>();

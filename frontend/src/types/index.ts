@@ -132,6 +132,7 @@ export interface BatchOperationRequest {
 export interface ChatRequest {
   query: string
   conversationId?: string
+  modelId?: string
   retrievalOptions?: Record<string, unknown>
 }
 
@@ -171,6 +172,7 @@ export interface DocumentChunk {
   id: string
   index: number
   content: string
+  chunkingStrategy?: string
   summary?: string
   vectorDimension?: number
   status: 'pending' | 'indexing' | 'completed' | 'failed'
@@ -200,6 +202,7 @@ export interface DocumentUploadMetadata {
   description?: string
   departmentId?: string
   accessLevel?: 'Public' | 'Department' | 'Restricted' | 'Confidential'
+  chunkingStrategy?: 'Auto' | 'MoE' | 'Character'
 }
 
 export interface IndexQueueItem {

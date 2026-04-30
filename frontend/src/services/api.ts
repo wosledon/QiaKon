@@ -56,6 +56,32 @@ import type {
 } from '@/types'
 import { clearAuthStorage } from '@/stores/authStore'
 
+interface BackendChunkInfo {
+  id: string
+  order: number
+  content: string
+  chunkingStrategy?: string
+  createdAt: string
+}
+
+interface BackendDocumentDetail {
+  id: string
+  title: string
+  content?: string
+  type: string
+  departmentId: string
+  departmentName: string
+  accessLevel: string
+  indexStatus: 'pending' | 'indexing' | 'completed' | 'failed'
+  version: number
+  indexVersion?: number
+  size: number
+  metadata?: Record<string, unknown>
+  createdAt: string
+  modifiedAt?: string
+  chunks?: BackendChunkInfo[]
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
 function getToken(): string | null {
@@ -218,7 +244,10 @@ export const documentApi = {
     const query = buildQuery(params ?? {})
     return apiGet<PagedList<Document>>(`/documents${query}`)
   },
-  get: (id: string) => apiGet<DocumentDetail>(`/documents/${id}`),
+  get: async (id: string) => {
+    const data = await apiGet<BackendDocumentDetail>(`/documents/${id}`)
+    return toFrontendDocumentDetail(data)
+  },
   update: (id: string, data: Partial<Document>) => apiPut<Document>(`/documents/${id}`, data),
   upload: (file: File, metadata?: Record<string, string>) => {
     const formData = new FormData()
@@ -230,12 +259,40 @@ export const documentApi = {
   },
   delete: (id: string) => apiDelete<void>(`/documents/${id}`),
   batchDelete: (ids: string[]) => apiPost<void>('/documents/batch-delete', { ids }),
-  reparse: (id: string) => apiPost<void>(`/documents/${id}/reparse`, {}),
+  reparse: (id: string, chunkingStrategy?: 'Auto' | 'MoE' | 'Character') =>
+    apiPost<void>(`/documents/${id}/reparse`, {
+      chunkingStrategy: chunkingStrategy && chunkingStrategy !== 'Auto' ? chunkingStrategy : null,
+    }),
   reindex: (id: string) => apiPost<void>(`/documents/${id}/reindex`, {}),
   indexQueue: () => apiGet<IndexQueueItem[]>('/documents/index/queue'),
   indexStats: () => apiGet<IndexStats>('/documents/index/stats'),
   retryFailed: () => apiPost<void>('/documents/index/retry-failed', {}),
   rebuildIndex: () => apiPost<void>('/documents/index/rebuild', {}),
+}
+
+function toFrontendDocumentDetail(data: BackendDocumentDetail): DocumentDetail {
+  return {
+    id: data.id,
+    title: data.title,
+    type: data.type,
+    departmentId: data.departmentId,
+    departmentName: data.departmentName,
+    accessLevel: data.accessLevel,
+    indexStatus: data.indexStatus,
+    version: data.version,
+    createdAt: data.createdAt,
+    updatedAt: data.modifiedAt,
+    size: data.size,
+    metadata: data.metadata,
+    content: data.content || '',
+    chunks: (data.chunks || []).map(chunk => ({
+      id: chunk.id,
+      index: chunk.order,
+      content: chunk.content,
+      chunkingStrategy: chunk.chunkingStrategy,
+      status: 'completed',
+    })),
+  }
 }
 
 // Graph API

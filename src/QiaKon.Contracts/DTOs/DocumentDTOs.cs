@@ -70,7 +70,8 @@ public sealed record UploadDocumentFormDto(
     string? Description,
     Guid? DepartmentId,
     AccessLevel? AccessLevel,
-    string? Visibility);
+    string? Visibility,
+    string? ChunkingStrategy = null);
 
 /// <summary>
 /// 文档分页列表响应

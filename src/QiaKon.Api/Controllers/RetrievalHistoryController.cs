@@ -111,23 +111,6 @@ public class RetrievalHistoryController : ControllerBase
         return File(bytes, "text/markdown", $"conversation_{id}_{DateTime.UtcNow:yyyyMMddHHmmss}.md");
     }
 
-    /// <summary>
-    /// 继续对话（发送消息）
-    /// </summary>
-    [HttpPost("chat")]
-    public ApiResponse<RagChatResponseDto> Chat([FromBody] RagChatRequestDto request)
-    {
-        try
-        {
-            var result = _ragService.Chat(request);
-            return ApiResponse<RagChatResponseDto>.Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return ApiResponse<RagChatResponseDto>.Fail("对话处理失败: " + ex.Message, 500);
-        }
-    }
-
     private static string GenerateMarkdown(ConversationDetailDto detail)
     {
         var sb = new StringBuilder();

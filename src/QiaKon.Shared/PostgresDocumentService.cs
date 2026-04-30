@@ -13,15 +13,18 @@ internal sealed class PostgresDocumentService : IDocumentService
 {
     private readonly QiaKonAppDbContext _dbContext;
     private readonly IHostEnvironment _hostEnvironment;
+    private readonly DocumentIndexingRuntime _indexingRuntime;
     private readonly ILogger<PostgresDocumentService>? _logger;
 
     public PostgresDocumentService(
         QiaKonAppDbContext dbContext,
         IHostEnvironment hostEnvironment,
+        DocumentIndexingRuntime indexingRuntime,
         ILogger<PostgresDocumentService>? logger = null)
     {
         _dbContext = dbContext;
         _hostEnvironment = hostEnvironment;
+        _indexingRuntime = indexingRuntime;
         _logger = logger;
     }
 
@@ -133,8 +136,17 @@ internal sealed class PostgresDocumentService : IDocumentService
         };
 
         _dbContext.Documents.Add(document);
-        _dbContext.DocumentChunks.AddRange(GenerateSimulatedChunks(document.Id, document.Content ?? string.Empty));
         _dbContext.SaveChanges();
+
+        try
+        {
+            _indexingRuntime.ProcessAndIndexAsync(document).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+            _logger?.LogError(ex, "创建文档后索引失败: {DocumentId}", document.Id);
+        }
 
         return ToDetailDto(document);
     }
@@ -151,14 +163,10 @@ internal sealed class PostgresDocumentService : IDocumentService
             await file.CopyToAsync(output, cancellationToken);
         }
 
-        string content;
+        string? content = null;
         if (IsPlainText(file.FileName, file.ContentType))
         {
             content = await File.ReadAllTextAsync(fullPath, cancellationToken);
-        }
-        else
-        {
-            content = $"已上传文件 {file.FileName}，大小 {file.Length} 字节。该文件已登记到知识库，可在后续接入真实解析器后处理。";
         }
 
         var metadata = new JsonObject
@@ -167,6 +175,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             ["contentType"] = file.ContentType,
             ["description"] = form.Description,
             ["visibility"] = form.Visibility,
+            ["chunkingStrategy"] = string.IsNullOrWhiteSpace(form.ChunkingStrategy) ? null : form.ChunkingStrategy,
         };
 
         var document = new DocumentRow
@@ -177,21 +186,29 @@ internal sealed class PostgresDocumentService : IDocumentService
             Type = GetDocumentType(file.FileName),
             DepartmentId = form.DepartmentId ?? QiaKonSeedData.GetDefaultDepartmentId(),
             AccessLevel = QiaKonSeedData.ResolveAccessLevel(form.AccessLevel, form.Visibility),
-            IndexStatus = IndexStatus.Completed,
+            IndexStatus = IndexStatus.Pending,
             Version = 1,
-            IndexVersion = 1,
+            IndexVersion = null,
             MetadataJson = SerializeJson(metadata),
             Size = file.Length,
             CreatedBy = userId,
             CreatedAt = DateTime.UtcNow,
             FilePath = relativePath,
-            IndexProgress = 100,
-            IndexCompletedAt = DateTime.UtcNow,
+            IndexProgress = 0,
         };
 
         _dbContext.Documents.Add(document);
-        _dbContext.DocumentChunks.AddRange(GenerateSimulatedChunks(document.Id, content));
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _indexingRuntime.ProcessAndIndexAsync(document, form.ChunkingStrategy, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _indexingRuntime.MarkFailedAsync(document, ex, cancellationToken);
+            _logger?.LogError(ex, "上传文档后索引失败: {DocumentId} ({Title})", document.Id, document.Title);
+        }
 
         _logger?.LogInformation("Document stored in PostgreSQL: {DocumentId} ({Title})", document.Id, document.Title);
         return ToDetailDto(document);
@@ -248,10 +265,13 @@ internal sealed class PostgresDocumentService : IDocumentService
             return false;
         }
 
-        var chunks = _dbContext.DocumentChunks.Where(c => c.DocumentId == id).ToList();
-        if (chunks.Count > 0)
+        try
         {
-            _dbContext.DocumentChunks.RemoveRange(chunks);
+            _indexingRuntime.DeleteDocumentIndexAsync(id).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "删除文档时清理向量索引失败: {DocumentId}", id);
         }
 
         _dbContext.Documents.Remove(document);
@@ -304,24 +324,29 @@ internal sealed class PostgresDocumentService : IDocumentService
             ? _dbContext.Documents.Where(d => d.Id == documentId.Value).ToList()
             : _dbContext.Documents.ToList();
 
+        var successCount = 0;
+        var failedCount = 0;
+
         foreach (var document in documents)
         {
-            document.IndexStatus = IndexStatus.Completed;
-            document.IndexVersion = (document.IndexVersion ?? 0) + 1;
-            document.IndexProgress = 100;
-            document.IndexStartedAt ??= DateTime.UtcNow.AddSeconds(-1);
-            document.IndexCompletedAt = DateTime.UtcNow;
-            document.IndexErrorMessage = null;
-
-            var hasChunks = _dbContext.DocumentChunks.Any(c => c.DocumentId == document.Id);
-            if (!hasChunks)
+            try
             {
-                _dbContext.DocumentChunks.AddRange(GenerateSimulatedChunks(document.Id, document.Content ?? string.Empty));
+                _indexingRuntime.ProcessAndIndexAsync(document).GetAwaiter().GetResult();
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+                failedCount++;
+                _logger?.LogError(ex, "重建索引失败: {DocumentId}", document.Id);
             }
         }
 
-        _dbContext.SaveChanges();
-        return new ReindexResponseDto(documents.Count, $"已重建 {documents.Count} 个文档的索引");
+        var message = failedCount == 0
+            ? $"已重建 {successCount} 个文档的索引"
+            : $"已重建 {successCount} 个文档的索引，{failedCount} 个失败";
+
+        return new ReindexResponseDto(successCount, message);
     }
 
     public IndexQueueStatusDto GetIndexQueueStatus()
@@ -357,17 +382,23 @@ internal sealed class PostgresDocumentService : IDocumentService
     public ReindexResponseDto RetryFailedIndexing()
     {
         var failedDocuments = _dbContext.Documents.Where(d => d.IndexStatus == IndexStatus.Failed).ToList();
+        var successCount = 0;
+
         foreach (var document in failedDocuments)
         {
-            document.IndexStatus = IndexStatus.Pending;
-            document.IndexProgress = 0;
-            document.IndexStartedAt = null;
-            document.IndexCompletedAt = null;
-            document.IndexErrorMessage = null;
+            try
+            {
+                _indexingRuntime.ProcessAndIndexAsync(document).GetAwaiter().GetResult();
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+                _logger?.LogError(ex, "重试失败文档索引时再次失败: {DocumentId}", document.Id);
+            }
         }
 
-        _dbContext.SaveChanges();
-        return new ReindexResponseDto(failedDocuments.Count, $"已重试 {failedDocuments.Count} 个失败任务");
+        return new ReindexResponseDto(successCount, $"已重试 {failedDocuments.Count} 个失败任务，成功 {successCount} 个");
     }
 
     public IndexStatsDto GetIndexStats()
@@ -410,25 +441,17 @@ internal sealed class PostgresDocumentService : IDocumentService
             return new ReparseResponseDto(documentId, "文档不存在", 0);
         }
 
-        var existingChunks = _dbContext.DocumentChunks.Where(c => c.DocumentId == documentId).ToList();
-        if (existingChunks.Count > 0)
+        try
         {
-            _dbContext.DocumentChunks.RemoveRange(existingChunks);
+            var result = _indexingRuntime.ProcessAndIndexAsync(document, chunkingStrategy).GetAwaiter().GetResult();
+            return new ReparseResponseDto(documentId, $"文档已按 {result.ChunkingStrategy} 重新解析并更新索引", result.ChunkCount);
         }
-
-        var newChunks = GenerateSimulatedChunks(documentId, document.Content ?? string.Empty, chunkingStrategy);
-        _dbContext.DocumentChunks.AddRange(newChunks);
-
-        document.IndexStatus = IndexStatus.Pending;
-        document.IndexVersion = null;
-        document.IndexProgress = 0;
-        document.IndexStartedAt = null;
-        document.IndexCompletedAt = null;
-        document.IndexErrorMessage = null;
-        document.ModifiedAt = DateTime.UtcNow;
-
-        _dbContext.SaveChanges();
-        return new ReparseResponseDto(documentId, "文档已重新解析", newChunks.Count);
+        catch (Exception ex)
+        {
+            _indexingRuntime.MarkFailedAsync(document, ex).GetAwaiter().GetResult();
+            _logger?.LogError(ex, "文档重新解析失败: {DocumentId}", documentId);
+            return new ReparseResponseDto(documentId, $"文档重新解析失败: {ex.Message}", 0);
+        }
     }
 
     private DocumentListItemDto ToListItemDto(DocumentRow document)
@@ -477,47 +500,6 @@ internal sealed class PostgresDocumentService : IDocumentService
             document.IndexErrorMessage,
             document.CreatedAt);
 
-    private List<DocumentChunkRow> GenerateSimulatedChunks(Guid documentId, string content, string? chunkingStrategy = null)
-    {
-        var strategy = string.IsNullOrWhiteSpace(chunkingStrategy) ? "RecursiveCharacterTextSplitter" : chunkingStrategy;
-        var chunks = new List<DocumentChunkRow>();
-        var sentences = content.Split(['。', '；', '\n', '！', '？'], StringSplitOptions.RemoveEmptyEntries);
-
-        for (var i = 0; i < sentences.Length; i++)
-        {
-            var sentence = sentences[i].Trim();
-            if (string.IsNullOrWhiteSpace(sentence))
-            {
-                continue;
-            }
-
-            chunks.Add(new DocumentChunkRow
-            {
-                Id = Guid.NewGuid(),
-                DocumentId = documentId,
-                Content = sentence.Length > 200 ? sentence[..200] : sentence,
-                Order = i + 1,
-                ChunkingStrategy = strategy,
-                CreatedAt = DateTime.UtcNow,
-            });
-        }
-
-        if (chunks.Count == 0)
-        {
-            chunks.Add(new DocumentChunkRow
-            {
-                Id = Guid.NewGuid(),
-                DocumentId = documentId,
-                Content = content.Length > 200 ? content[..200] : content,
-                Order = 1,
-                ChunkingStrategy = strategy,
-                CreatedAt = DateTime.UtcNow,
-            });
-        }
-
-        return chunks;
-    }
-
     private string EnsureUploadDirectory()
     {
         var uploadsRoot = Path.Combine(_hostEnvironment.ContentRootPath, "uploads");
@@ -539,7 +521,7 @@ internal sealed class PostgresDocumentService : IDocumentService
         }
     }
 
-    private static bool IsPlainText(string fileName, string? contentType)
+    internal static bool IsPlainText(string fileName, string? contentType)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         return extension is ".txt" or ".md" or ".json" or ".csv" or ".xml"
@@ -566,10 +548,10 @@ internal sealed class PostgresDocumentService : IDocumentService
             _ => ".txt",
         };
 
-    private static string? SerializeJson(JsonObject? metadata)
+    internal static string? SerializeJson(JsonObject? metadata)
         => metadata?.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-    private static JsonObject? ParseJson(string? json)
+    internal static JsonObject? ParseJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {

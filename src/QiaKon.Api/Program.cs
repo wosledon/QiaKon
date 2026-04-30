@@ -20,7 +20,9 @@ using QiaKon.Llm.Tokenization;
 using QiaKon.Queue;
 using QiaKon.Queue.Kafka;
 using QiaKon.Queue.Memory;
+using QiaKon.Retrieval;
 using QiaKon.Retrieval.Chunnking;
+using QiaKon.Retrieval.Chunnking.MoE;
 using QiaKon.Retrieval.DocumentProcessor;
 using QiaKon.Retrieval.Embedding;
 using QiaKon.Retrieval.VectorStore.Npgsql;
@@ -73,7 +75,9 @@ builder.Services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
 builder.Services.AddWorkflowCore();
 
 // ============ Retrieval Services ============
+builder.Services.AddRagInfrastructure();
 builder.Services.AddCharacterChunking();
+builder.Services.AddMoEChunking();
 builder.Services.AddLocalEmbedding(options =>
 {
     options.ModelPath = "./models/embedding";

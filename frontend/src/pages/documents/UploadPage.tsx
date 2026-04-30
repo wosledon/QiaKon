@@ -71,6 +71,12 @@ const ACCESS_LEVEL_OPTIONS = [
   { value: 'Confidential', label: '机密' },
 ]
 
+const CHUNKING_STRATEGY_OPTIONS = [
+  { value: 'Auto', label: '自动（优先使用默认 MoE 分块模型）' },
+  { value: 'MoE', label: 'MoE 语义分块' },
+  { value: 'Character', label: '字符分块' },
+]
+
 const FILE_TYPE_TAGS = ['PDF', 'DOCX', 'MD', 'TXT']
 
 export function UploadPage() {
@@ -89,6 +95,7 @@ export function UploadPage() {
   const [description, setDescription] = useState('')
   const [departmentId, setDepartmentId] = useState('')
   const [accessLevel, setAccessLevel] = useState<'Public' | 'Department' | 'Restricted' | 'Confidential'>('Department')
+  const [chunkingStrategy, setChunkingStrategy] = useState<'Auto' | 'MoE' | 'Character'>('Auto')
 
   const handleFile = useCallback(
     (selectedFile: File) => {
@@ -147,6 +154,7 @@ export function UploadPage() {
       const metadata: Record<string, string> = {
         title: title || file.name.replace(/\.[^/.]+$/, ''),
         accessLevel: accessLevel as string,
+        chunkingStrategy,
       }
       if (departmentId) metadata.departmentId = departmentId
       if (description) metadata.description = description
@@ -425,6 +433,17 @@ export function UploadPage() {
                 }
                 options={ACCESS_LEVEL_OPTIONS}
               />
+
+              <Select
+                label="分块策略"
+                value={chunkingStrategy}
+                onChange={(e) => setChunkingStrategy(e.target.value as 'Auto' | 'MoE' | 'Character')}
+                options={CHUNKING_STRATEGY_OPTIONS}
+              />
+
+              <p className="-mt-3 text-xs text-gray-500">
+                选择“自动”时，后端会优先使用你在大模型管理中设置的默认分块模型来触发 MoE 分块。
+              </p>
             </CardContent>
 
             <CardFooter className="bg-gray-50/50">

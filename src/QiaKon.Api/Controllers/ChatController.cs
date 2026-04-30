@@ -10,21 +10,15 @@ namespace QiaKon.Api.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly IRagService _ragService;
+    private readonly ConfiguredLlmModelResolver _modelResolver;
     private readonly ILogger<ChatController> _logger;
-
-    private static readonly List<LlmModelDto> _availableModels =
-    [
-        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Guid.Empty, "Qwen-Max", "qwen-max", LlmModelType.Inference, null, 128000, true, true),
-        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab"), Guid.Empty, "Qwen-Turbo", "qwen-turbo", LlmModelType.Inference, null, 128000, true, false),
-        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaac"), Guid.Empty, "GPT-4o", "gpt-4o", LlmModelType.Inference, null, 128000, true, false),
-        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaad"), Guid.Empty, "Claude-3.5-Sonnet", "claude-3-5-sonnet-20241022", LlmModelType.Inference, null, 200000, true, false),
-    ];
 
     private static readonly Dictionary<Guid, Guid> _conversationModels = new();
 
-    public ChatController(IRagService ragService, ILogger<ChatController> logger)
+    public ChatController(IRagService ragService, ConfiguredLlmModelResolver modelResolver, ILogger<ChatController> logger)
     {
         _ragService = ragService;
+        _modelResolver = modelResolver;
         _logger = logger;
     }
 
@@ -54,6 +48,13 @@ public class ChatController : ControllerBase
     {
         try
         {
+            if (!request.ModelId.HasValue
+                && request.ConversationId.HasValue
+                && _conversationModels.TryGetValue(request.ConversationId.Value, out var selectedModelId))
+            {
+                request = request with { ModelId = selectedModelId };
+            }
+
             var result = _ragService.Chat(request);
             _logger.LogInformation("RAG chat query: {Query}, sources: {SourceCount}", request.Query, result.Sources.Count);
             return ApiResponse<RagChatResponseDto>.Ok(result);
@@ -103,7 +104,7 @@ public class ChatController : ControllerBase
     [HttpGet("models")]
     public ApiResponse<IReadOnlyList<LlmModelDto>> GetModels()
     {
-        return ApiResponse<IReadOnlyList<LlmModelDto>>.Ok(_availableModels);
+        return ApiResponse<IReadOnlyList<LlmModelDto>>.Ok(_modelResolver.GetEnabledInferenceModels());
     }
 
     /// <summary>
@@ -112,7 +113,7 @@ public class ChatController : ControllerBase
     [HttpPost("models/switch")]
     public ApiResponse<bool> SwitchModel([FromBody] SwitchModelRequestDto request)
     {
-        var model = _availableModels.FirstOrDefault(m => m.Id == request.ModelId);
+        var model = _modelResolver.GetEnabledInferenceModels().FirstOrDefault(m => m.Id == request.ModelId);
         if (model == null)
         {
             return ApiResponse<bool>.Fail("模型不存在", 404);

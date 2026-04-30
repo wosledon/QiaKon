@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using QiaKon.Retrieval.Embedding;
 using QiaKon.Retrieval.VectorStore;
+using System.Text.Json;
 
 namespace QiaKon.Retrieval;
 
@@ -155,11 +156,11 @@ public sealed class RagPipeline : IRagPipeline
             Chunk = new Chunk
             {
                 Id = r.Record.Id,
-                DocumentId = r.Record.Metadata.GetValueOrDefault("documentId") is Guid docId ? docId : Guid.Empty,
+                DocumentId = GetGuidMetadata(r.Record.Metadata, "documentId"),
                 Text = r.Record.Text ?? string.Empty,
-                StartIndex = r.Record.Metadata.GetValueOrDefault("startIndex") is int si ? si : 0,
-                EndIndex = r.Record.Metadata.GetValueOrDefault("endIndex") is int ei ? ei : 0,
-                Sequence = r.Record.Metadata.GetValueOrDefault("sequence") is int seq ? seq : 0,
+                StartIndex = GetIntMetadata(r.Record.Metadata, "startIndex"),
+                EndIndex = GetIntMetadata(r.Record.Metadata, "endIndex"),
+                Sequence = GetIntMetadata(r.Record.Metadata, "sequence"),
                 Metadata = r.Record.Metadata
                     .Where(m => m.Key.StartsWith("chunk_"))
                     .ToDictionary(
@@ -218,16 +219,59 @@ public sealed class RagPipeline : IRagPipeline
 
     private static IDocument? ReconstructDocument(VectorRecord record)
     {
-        if (record.Metadata.GetValueOrDefault("documentId") is not Guid docId)
+        var docId = GetGuidMetadata(record.Metadata, "documentId");
+        if (docId == Guid.Empty)
             return null;
 
         return new Document
         {
             Id = docId,
-            Title = record.Metadata.GetValueOrDefault("documentTitle")?.ToString(),
+            Title = GetStringMetadata(record.Metadata, "documentTitle"),
             Content = record.Text ?? string.Empty,
-            Source = record.Metadata.GetValueOrDefault("source")?.ToString(),
-            MimeType = record.Metadata.GetValueOrDefault("mimeType")?.ToString()
+            Source = GetStringMetadata(record.Metadata, "source"),
+            MimeType = GetStringMetadata(record.Metadata, "mimeType")
+        };
+    }
+
+    private static Guid GetGuidMetadata(IReadOnlyDictionary<string, object?> metadata, string key)
+    {
+        if (!metadata.TryGetValue(key, out var value) || value is null)
+            return Guid.Empty;
+
+        return value switch
+        {
+            Guid guid => guid,
+            string str when Guid.TryParse(str, out var guid) => guid,
+            JsonElement { ValueKind: JsonValueKind.String } json when Guid.TryParse(json.GetString(), out var guid) => guid,
+            _ => Guid.Empty
+        };
+    }
+
+    private static int GetIntMetadata(IReadOnlyDictionary<string, object?> metadata, string key)
+    {
+        if (!metadata.TryGetValue(key, out var value) || value is null)
+            return 0;
+
+        return value switch
+        {
+            int intValue => intValue,
+            long longValue => (int)longValue,
+            string str when int.TryParse(str, out var intValue) => intValue,
+            JsonElement { ValueKind: JsonValueKind.Number } json when json.TryGetInt32(out var intValue) => intValue,
+            _ => 0
+        };
+    }
+
+    private static string? GetStringMetadata(IReadOnlyDictionary<string, object?> metadata, string key)
+    {
+        if (!metadata.TryGetValue(key, out var value) || value is null)
+            return null;
+
+        return value switch
+        {
+            string str => str,
+            JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(),
+            _ => value.ToString()
         };
     }
 }

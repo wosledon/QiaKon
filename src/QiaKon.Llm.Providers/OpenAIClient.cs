@@ -18,19 +18,17 @@ public sealed class OpenAiClient : HttpLlmClientBase
     {
     }
 
-    protected override void ConfigureHeaders(HttpClient client, LlmOptions options)
+    protected override void ConfigureRequest(HttpRequestMessage request, LlmOptions options)
     {
-        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-
         if (!string.IsNullOrEmpty(options.ApiKey))
         {
-            client.DefaultRequestHeaders.Authorization =
+            request.Headers.Authorization =
                 new AuthenticationHeaderValue("Bearer", options.ApiKey);
         }
 
         if (!string.IsNullOrEmpty(options.Organization))
         {
-            client.DefaultRequestHeaders.Add("OpenAI-Organization", options.Organization);
+            request.Headers.Add("OpenAI-Organization", options.Organization);
         }
     }
 

@@ -69,7 +69,7 @@ builder.Services.AddLlmTokenizer("default");
 builder.Services.AddConversationContext(maxMessages: 50, maxTokens: 8000);
 // 注：当前使用内存RAG服务，暂不注册PromptTemplate（需要模板字符串参数）
 // builder.Services.AddSingleton<PromptTemplate>();
-builder.Services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
+builder.Services.AddSingleton<ILlmClientFactory>(_ => new LlmClientFactory());
 
 // ============ Workflow Services ============
 builder.Services.AddWorkflowCore();

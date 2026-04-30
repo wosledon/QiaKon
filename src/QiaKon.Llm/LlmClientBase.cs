@@ -13,6 +13,7 @@ public abstract class HttpLlmClientBase : ILlmClient
 {
     protected HttpClient HttpClient { get; }
     protected LlmOptions Options { get; }
+    protected Uri BaseUri { get; }
     protected JsonSerializerOptions JsonOptions { get; }
 
     public abstract LlmProviderType Provider { get; }
@@ -22,6 +23,7 @@ public abstract class HttpLlmClientBase : ILlmClient
     {
         HttpClient = httpClient;
         Options = options;
+        BaseUri = BuildBaseUri(options.BaseUrl);
 
         JsonOptions = new JsonSerializerOptions
         {
@@ -29,11 +31,9 @@ public abstract class HttpLlmClientBase : ILlmClient
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
         };
-
-        ConfigureHeaders(httpClient, options);
     }
 
-    protected abstract void ConfigureHeaders(HttpClient client, LlmOptions options);
+    protected abstract void ConfigureRequest(HttpRequestMessage request, LlmOptions options);
 
     public abstract Task<ChatCompletionResponse> CompleteAsync(
         ChatCompletionRequest request,
@@ -55,7 +55,8 @@ public abstract class HttpLlmClientBase : ILlmClient
         object? body,
         CancellationToken cancellationToken)
     {
-        var request = new HttpRequestMessage(method, url);
+        var request = new HttpRequestMessage(method, BuildRequestUri(url));
+        ConfigureRequest(request, Options);
 
         if (body != null)
         {
@@ -86,8 +87,7 @@ public abstract class HttpLlmClientBase : ILlmClient
             return normalizedRelativePath;
         }
 
-        var basePath = HttpClient.BaseAddress?.AbsolutePath
-            ?? new Uri(Options.BaseUrl, UriKind.Absolute).AbsolutePath;
+        var basePath = BaseUri.AbsolutePath;
         var trimmedBasePath = basePath.TrimEnd('/');
 
         if (trimmedBasePath.EndsWith('/' + normalizedVersion, StringComparison.OrdinalIgnoreCase)
@@ -105,7 +105,8 @@ public abstract class HttpLlmClientBase : ILlmClient
         object? body,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var request = new HttpRequestMessage(method, url);
+        var request = new HttpRequestMessage(method, BuildRequestUri(url));
+        ConfigureRequest(request, Options);
 
         if (body != null)
         {
@@ -148,6 +149,26 @@ public abstract class HttpLlmClientBase : ILlmClient
     }
 
     protected abstract ChatCompletionChunk? ParseStreamChunk(string data);
+
+    private static Uri BuildBaseUri(string baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new ArgumentException("LLM BaseUrl cannot be empty.", nameof(baseUrl));
+        }
+
+        return new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute);
+    }
+
+    private Uri BuildRequestUri(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri;
+        }
+
+        return new Uri(BaseUri, url);
+    }
 }
 
 /// <summary>

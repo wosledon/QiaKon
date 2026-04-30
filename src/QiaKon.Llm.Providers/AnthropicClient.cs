@@ -25,11 +25,10 @@ public sealed class AnthropicClient : HttpLlmClientBase
     {
     }
 
-    protected override void ConfigureHeaders(HttpClient client, LlmOptions options)
+    protected override void ConfigureRequest(HttpRequestMessage request, LlmOptions options)
     {
-        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-        client.DefaultRequestHeaders.Add("x-api-key", options.ApiKey);
-        client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+        request.Headers.Add("x-api-key", options.ApiKey);
+        request.Headers.Add("anthropic-version", "2023-06-01");
     }
 
     public override async Task<ChatCompletionResponse> CompleteAsync(

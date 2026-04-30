@@ -9,7 +9,11 @@ public sealed class LlmClientFactory : ILlmClientFactory
 {
     private readonly HttpClient? _sharedHttpClient;
 
-    public LlmClientFactory(HttpClient? sharedHttpClient = null)
+    public LlmClientFactory()
+    {
+    }
+
+    internal LlmClientFactory(HttpClient sharedHttpClient)
     {
         _sharedHttpClient = sharedHttpClient;
     }

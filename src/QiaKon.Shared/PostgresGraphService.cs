@@ -502,7 +502,7 @@ internal sealed class PostgresGraphService : IGraphService
         {
             groups = materialized
                 .GroupBy(e => e.DepartmentId)
-                .Select(g => new AggregateGroupDto(QiaKonSeedData.GetDepartmentName(g.Key), g.LongCount(), totalCount > 0 ? g.LongCount() * 100d / totalCount : 0))
+                .Select(g => new AggregateGroupDto(ResolveDepartmentName(g.Key), g.LongCount(), totalCount > 0 ? g.LongCount() * 100d / totalCount : 0))
                 .ToList();
         }
         else
@@ -536,7 +536,7 @@ internal sealed class PostgresGraphService : IGraphService
                 e.Id,
                 e.Name,
                 e.Type,
-                QiaKonSeedData.GetDepartmentName(e.DepartmentId),
+                ResolveDepartmentName(e.DepartmentId),
                 e.IsPublic,
                 entityDegrees.GetValueOrDefault(e.Id, 0)))
             .ToList();
@@ -584,7 +584,7 @@ internal sealed class PostgresGraphService : IGraphService
             entity.Name,
             entity.Type,
             entity.DepartmentId,
-            QiaKonSeedData.GetDepartmentName(entity.DepartmentId),
+            ResolveDepartmentName(entity.DepartmentId),
             entity.IsPublic,
             ParseJson(entity.PropertiesJson) ?? new JsonObject(),
             entity.CreatedAt,
@@ -617,6 +617,12 @@ internal sealed class PostgresGraphService : IGraphService
 
         return JsonNode.Parse(json) as JsonObject;
     }
+
+    private string ResolveDepartmentName(Guid departmentId)
+        => _dbContext.Departments.AsNoTracking()
+            .Where(x => x.Id == departmentId)
+            .Select(x => x.Name)
+            .FirstOrDefault() ?? QiaKonSeedData.GetDepartmentName(departmentId);
 
     private sealed record GraphSnapshot(
         IReadOnlyDictionary<string, GraphEntityRow> Entities,

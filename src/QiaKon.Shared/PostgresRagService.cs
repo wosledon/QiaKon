@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QiaKon.Contracts.DTOs;
 using QiaKon.Llm;
@@ -9,19 +10,20 @@ namespace QiaKon.Shared;
 
 internal sealed class PostgresRagService : IRagService
 {
+    private readonly QiaKonAppDbContext _dbContext;
     private readonly IRagPipeline _ragPipeline;
     private readonly ILlmClientFactory _llmClientFactory;
     private readonly ConfiguredLlmModelResolver _modelResolver;
     private readonly ILogger<PostgresRagService>? _logger;
-    private readonly Dictionary<Guid, ChatSessionRecord> _sessions = new();
-    private readonly object _syncRoot = new();
 
     public PostgresRagService(
+        QiaKonAppDbContext dbContext,
         IRagPipeline ragPipeline,
         ILlmClientFactory llmClientFactory,
         ConfiguredLlmModelResolver modelResolver,
         ILogger<PostgresRagService>? logger = null)
     {
+        _dbContext = dbContext;
         _ragPipeline = ragPipeline;
         _llmClientFactory = llmClientFactory;
         _modelResolver = modelResolver;
@@ -63,110 +65,185 @@ internal sealed class PostgresRagService : IRagService
     {
         var conversationId = request.ConversationId ?? Guid.NewGuid();
         var retrieved = Retrieve(new RetrieveRequestDto(request.Query, request.TopK));
-
         var session = GetOrCreateSession(conversationId, request.Query);
-        session.Messages.Add(new ChatMessageRecord("user", request.Query, null));
+
+        var userMessage = new ConversationMessageRow
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = session.Id,
+            Role = "user",
+            Content = request.Query,
+            SourcesJson = null,
+            CreatedAt = DateTime.UtcNow
+        };
+        _dbContext.ConversationMessages.Add(userMessage);
+
+        string responseText;
+        IReadOnlyList<RagSourceDto> sources;
 
         if (retrieved.Results.Count == 0)
         {
-            const string noResultResponse = "我没有从当前知识库中检索到足够相关的内容，建议先确认文档已完成解析、分块和索引。";
-            session.Messages.Add(new ChatMessageRecord("assistant", noResultResponse, Array.Empty<RagSourceDto>()));
-            session.UpdatedAt = DateTime.UtcNow;
-            return new RagChatResponseDto(noResultResponse, Array.Empty<RagSourceDto>(), conversationId, CountTurns(session));
+            responseText = "我没有从当前知识库中检索到足够相关的内容，建议先确认文档已完成解析、分块和索引。";
+            sources = Array.Empty<RagSourceDto>();
         }
-
-        var modelSelection = request.ModelId.HasValue
-            ? _modelResolver.TryGetInferenceModel(request.ModelId.Value)
-            : _modelResolver.TryGetDefaultInferenceModel();
-
-        if (modelSelection is null)
+        else
         {
-            throw new InvalidOperationException("未找到已启用的默认推理模型，请先在大模型管理中启用并设为默认。\n当前对话链路已切换为真实推理，不再使用模板回答。");
-        }
+            var modelSelection = request.ModelId.HasValue
+                ? _modelResolver.TryGetInferenceModel(request.ModelId.Value)
+                : _modelResolver.TryGetDefaultInferenceModel();
 
-        var llmRequest = new ChatCompletionRequest
-        {
-            Model = modelSelection.Model.ActualModelName,
-            Messages =
-            [
-                ChatMessage.System("你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。"),
-                ChatMessage.User(BuildRagPrompt(request.Query, retrieved.Results))
-            ],
-            InferenceOptions = new LlmInferenceOptions
+            if (modelSelection is null)
             {
-                Temperature = 0.2,
-                MaxTokens = Math.Min(modelSelection.Model.MaxTokens ?? 4096, 4096)
+                throw new InvalidOperationException("未找到已启用的默认推理模型，请先在大模型管理中启用并设为默认。当前对话链路已切换为真实推理，不再使用模板回答。");
             }
+
+            var llmRequest = new ChatCompletionRequest
+            {
+                Model = modelSelection.Model.ActualModelName,
+                Messages =
+                [
+                    ChatMessage.System("你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。"),
+                    ChatMessage.User(BuildRagPrompt(request.Query, retrieved.Results))
+                ],
+                InferenceOptions = new LlmInferenceOptions
+                {
+                    Temperature = 0.2,
+                    MaxTokens = Math.Min(modelSelection.Model.MaxTokens ?? 4096, 4096)
+                }
+            };
+
+            responseText = ExecuteCompletion(modelSelection, llmRequest);
+            sources = retrieved.Results
+                .Select(result => new RagSourceDto(
+                    result.DocumentId,
+                    result.DocumentTitle,
+                    result.Text,
+                    result.Score,
+                    TruncateText(result.Text, 120)))
+                .ToList();
+        }
+
+        var assistantMessage = new ConversationMessageRow
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = session.Id,
+            Role = "assistant",
+            Content = responseText,
+            SourcesJson = PostgresPersistenceJson.Serialize(sources),
+            CreatedAt = DateTime.UtcNow
         };
+        _dbContext.ConversationMessages.Add(assistantMessage);
 
-        var responseText = ExecuteCompletion(modelSelection, llmRequest);
-        var sources = retrieved.Results
-            .Select(result => new RagSourceDto(
-                result.DocumentId,
-                result.DocumentTitle,
-                result.Text,
-                result.Score,
-                TruncateText(result.Text, 120)))
-            .ToList();
+        if (string.IsNullOrWhiteSpace(session.Title))
+        {
+            session.Title = TruncateText(request.Query, 24);
+        }
 
-        session.Messages.Add(new ChatMessageRecord("assistant", responseText, sources));
-        session.UpdatedAt = DateTime.UtcNow;
+        session.UpdatedAt = assistantMessage.CreatedAt;
+        _dbContext.SaveChanges();
 
-        return new RagChatResponseDto(responseText, sources, conversationId, CountTurns(session));
+        return new RagChatResponseDto(responseText, sources, conversationId, CountTurns(session.Id));
     }
 
     public IReadOnlyList<ConversationHistoryDto> GetConversationHistory(int offset, int limit, Guid? userId = null)
     {
-        lock (_syncRoot)
+        var query = _dbContext.ConversationSessions.AsNoTracking().AsQueryable();
+        if (userId.HasValue)
         {
-            return _sessions.Values
-                .OrderByDescending(s => s.UpdatedAt)
-                .Skip(offset)
-                .Take(limit)
-                .Select(s => new ConversationHistoryDto(s.Id, s.Title, s.Messages.Count, s.CreatedAt, s.UpdatedAt))
-                .ToList();
+            query = query.Where(x => x.UserId == userId.Value);
         }
+
+        var sessions = query
+            .OrderByDescending(x => x.UpdatedAt)
+            .Skip(offset)
+            .Take(limit)
+            .ToList();
+
+        var sessionIds = sessions.Select(x => x.Id).ToList();
+        var messageCounts = _dbContext.ConversationMessages.AsNoTracking()
+            .Where(x => sessionIds.Contains(x.ConversationId))
+            .GroupBy(x => x.ConversationId)
+            .ToDictionary(x => x.Key, x => x.Count());
+
+        return sessions
+            .Select(x => new ConversationHistoryDto(x.Id, x.Title, messageCounts.GetValueOrDefault(x.Id), x.CreatedAt, x.UpdatedAt))
+            .ToList();
     }
 
     public ConversationDetailDto? GetConversationDetail(Guid conversationId)
     {
-        lock (_syncRoot)
+        var session = _dbContext.ConversationSessions.AsNoTracking().FirstOrDefault(x => x.Id == conversationId);
+        if (session is null)
         {
-            if (!_sessions.TryGetValue(conversationId, out var session))
-            {
-                return null;
-            }
-
-            return new ConversationDetailDto(
-                session.Id,
-                session.Title,
-                session.Messages.Select(m => new ChatMessageDto(m.Id, m.Role, m.Content, m.CreatedAt, m.Sources)).ToList(),
-                session.CreatedAt,
-                session.UpdatedAt);
+            return null;
         }
+
+        var messages = _dbContext.ConversationMessages.AsNoTracking()
+            .Where(x => x.ConversationId == conversationId)
+            .OrderBy(x => x.CreatedAt)
+            .ToList()
+            .Select(ToChatMessageDto)
+            .ToList();
+
+        return new ConversationDetailDto(session.Id, session.Title, messages, session.CreatedAt, session.UpdatedAt);
     }
 
     public bool DeleteConversation(Guid conversationId)
     {
-        lock (_syncRoot)
+        var session = _dbContext.ConversationSessions.FirstOrDefault(x => x.Id == conversationId);
+        if (session is null)
         {
-            return _sessions.Remove(conversationId);
+            return false;
         }
+
+        var messages = _dbContext.ConversationMessages.Where(x => x.ConversationId == conversationId).ToList();
+        if (messages.Count > 0)
+        {
+            _dbContext.ConversationMessages.RemoveRange(messages);
+        }
+
+        _dbContext.ConversationSessions.Remove(session);
+        _dbContext.SaveChanges();
+        return true;
     }
 
-    private ChatSessionRecord GetOrCreateSession(Guid conversationId, string query)
+    public ConversationDetailDto? UpdateConversationTitle(Guid conversationId, string title)
     {
-        lock (_syncRoot)
+        var session = _dbContext.ConversationSessions.FirstOrDefault(x => x.Id == conversationId);
+        if (session is null)
         {
-            if (_sessions.TryGetValue(conversationId, out var existing))
-            {
-                return existing;
-            }
-
-            var created = new ChatSessionRecord(conversationId, TruncateText(query, 24), [], DateTime.UtcNow);
-            _sessions[conversationId] = created;
-            return created;
+            return null;
         }
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            session.Title = title.Trim();
+            session.UpdatedAt = DateTime.UtcNow;
+            _dbContext.SaveChanges();
+        }
+
+        return GetConversationDetail(conversationId);
+    }
+
+    private ConversationSessionRow GetOrCreateSession(Guid conversationId, string query)
+    {
+        var session = _dbContext.ConversationSessions.FirstOrDefault(x => x.Id == conversationId);
+        if (session is not null)
+        {
+            return session;
+        }
+
+        session = new ConversationSessionRow
+        {
+            Id = conversationId,
+            UserId = null,
+            Title = TruncateText(query, 24),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.ConversationSessions.Add(session);
+        return session;
     }
 
     private string ExecuteCompletion(ConfiguredLlmModelSelection modelSelection, ChatCompletionRequest llmRequest)
@@ -212,33 +289,17 @@ internal sealed class PostgresRagService : IRagService
         return sb.ToString();
     }
 
-    private static int CountTurns(ChatSessionRecord session)
-        => Math.Max(1, session.Messages.Count / 2);
+    private ChatMessageDto ToChatMessageDto(ConversationMessageRow row)
+        => new(
+            row.Id,
+            row.Role,
+            row.Content,
+            row.CreatedAt,
+            PostgresPersistenceJson.Deserialize<IReadOnlyList<RagSourceDto>>(row.SourcesJson));
+
+    private int CountTurns(Guid conversationId)
+        => Math.Max(1, _dbContext.ConversationMessages.Count(x => x.ConversationId == conversationId) / 2);
 
     private static string TruncateText(string text, int maxLength)
         => text.Length <= maxLength ? text : text[..(maxLength - 3)] + "...";
-
-    private sealed class ChatSessionRecord
-    {
-        public Guid Id { get; }
-        public string Title { get; }
-        public List<ChatMessageRecord> Messages { get; }
-        public DateTime CreatedAt { get; }
-        public DateTime UpdatedAt { get; set; }
-
-        public ChatSessionRecord(Guid id, string title, List<ChatMessageRecord> messages, DateTime createdAt)
-        {
-            Id = id;
-            Title = title;
-            Messages = messages;
-            CreatedAt = createdAt;
-            UpdatedAt = createdAt;
-        }
-    }
-
-    private sealed record ChatMessageRecord(string Role, string Content, IReadOnlyList<RagSourceDto>? Sources)
-    {
-        public Guid Id { get; init; } = Guid.NewGuid();
-        public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
-    }
 }

@@ -64,20 +64,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentService, PostgresDocumentService>();
         services.AddScoped<IGraphService, PostgresGraphService>();
         services.AddScoped<DocumentIndexingRuntime>();
-        services.AddScoped<IDashboardService, MemoryDashboardService>();
-        services.AddScoped<IGraphOverviewService, MemoryGraphOverviewService>();
-
-        // Keep low-risk auxiliary services in memory for now
-        services.AddSingleton<IAuthService, MemoryAuthService>();
-        services.AddSingleton<ConfiguredLlmModelResolver>();
-        services.AddSingleton<IRagService, PostgresRagService>();
-        services.AddSingleton<IDepartmentService, MemoryDepartmentService>();
-        services.AddSingleton<IRoleService, MemoryRoleService>();
-        services.AddSingleton<IUserService, MemoryUserService>();
-        services.AddSingleton<ILlmProviderService, MemoryLlmProviderService>();
-        services.AddSingleton<ISystemConfigService, MemorySystemConfigService>();
-        services.AddSingleton<IConnectorService, MemoryConnectorService>();
-        services.AddSingleton<IAuditLogService, MemoryAuditLogService>();
+        services.AddScoped<IDashboardService, PostgresDashboardService>();
+        services.AddScoped<IGraphOverviewService, PostgresGraphOverviewService>();
+        services.AddScoped<IAuthService, PostgresAuthService>();
+        services.AddScoped<ConfiguredLlmModelResolver>();
+        services.AddScoped<IRagService, PostgresRagService>();
+        services.AddScoped<IDepartmentService, PostgresDepartmentService>();
+        services.AddScoped<IRoleService, PostgresRoleService>();
+        services.AddScoped<IUserService, PostgresUserService>();
+        services.AddScoped<ILlmProviderService, PostgresLlmProviderService>();
+        services.AddScoped<ISystemConfigService, PostgresSystemConfigService>();
+        services.AddScoped<IConnectorService, PostgresConnectorService>();
+        services.AddScoped<IAuditLogService, PostgresAuditLogService>();
 
         return services;
     }

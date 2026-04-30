@@ -128,6 +128,18 @@ public sealed class MemoryRagService : IRagService
         return _sessions.Remove(conversationId);
     }
 
+    public ConversationDetailDto? UpdateConversationTitle(Guid conversationId, string title)
+    {
+        if (!_sessions.TryGetValue(conversationId, out var session))
+        {
+            return null;
+        }
+
+        session.Title = string.IsNullOrWhiteSpace(title) ? session.Title : title.Trim();
+        session.UpdatedAt = DateTime.UtcNow;
+        return GetConversationDetail(conversationId);
+    }
+
     private static string GenerateAnswer(string query, IReadOnlyList<RetrieveResultItemDto> results)
     {
         var sb = new StringBuilder();
@@ -182,7 +194,7 @@ public sealed class MemoryRagService : IRagService
     private sealed class ChatSessionRecord
     {
         public Guid Id { get; }
-        public string Title { get; }
+        public string Title { get; set; }
         public List<ChatMessageRecord> Messages { get; }
         public DateTime CreatedAt { get; }
         public DateTime UpdatedAt { get; set; }

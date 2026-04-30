@@ -83,14 +83,17 @@ public class RetrievalHistoryController : ControllerBase
     [HttpPut("{id:guid}/title")]
     public ApiResponse<ConversationDetailDto> UpdateTitle(Guid id, [FromBody] UpdateTitleRequestDto request)
     {
-        var detail = _ragService.GetConversationDetail(id);
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            return ApiResponse<ConversationDetailDto>.Fail("标题不能为空", 400);
+        }
+
+        var detail = _ragService.UpdateConversationTitle(id, request.Title);
         if (detail is null)
         {
             return ApiResponse<ConversationDetailDto>.Fail("对话不存在", 404);
         }
 
-        // 内存服务不支持更新标题，这里直接返回成功
-        // 实际实现应该调用服务层更新
         return ApiResponse<ConversationDetailDto>.Ok(detail, "标题更新成功");
     }
 

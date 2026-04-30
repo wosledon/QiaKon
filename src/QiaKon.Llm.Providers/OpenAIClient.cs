@@ -9,6 +9,8 @@ namespace QiaKon.Llm.Providers;
 /// </summary>
 public sealed class OpenAiClient : HttpLlmClientBase
 {
+    private const string ChatCompletionsPath = "chat/completions";
+
     public override LlmProviderType Provider => LlmProviderType.OpenAI;
 
     public OpenAiClient(HttpClient httpClient, LlmOptions options)
@@ -59,7 +61,7 @@ public sealed class OpenAiClient : HttpLlmClientBase
 
         var response = await SendRequestAsync<OpenAiChatResponse>(
             HttpMethod.Post,
-            "v1/chat/completions",
+            BuildVersionedRelativeUrl("v1", ChatCompletionsPath),
             apiRequest,
             cancellationToken);
 
@@ -83,7 +85,7 @@ public sealed class OpenAiClient : HttpLlmClientBase
 
         await foreach (var chunk in StreamRequestAsync(
             HttpMethod.Post,
-            "v1/chat/completions",
+            BuildVersionedRelativeUrl("v1", ChatCompletionsPath),
             apiRequest,
             cancellationToken))
         {

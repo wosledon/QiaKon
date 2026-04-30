@@ -37,7 +37,7 @@ public sealed class ConfiguredLlmModelResolver
                 _ => throw new NotSupportedException($"Unsupported provider type: {selection.Provider.InterfaceType}")
             },
             Model = selection.Model.ActualModelName,
-            BaseUrl = selection.Provider.BaseUrl,
+            BaseUrl = LlmProviderUrlNormalizer.NormalizeBaseUrl(selection.Provider.BaseUrl, selection.Provider.InterfaceType),
             ApiKey = selection.Provider.ApiKey,
             TimeoutSeconds = selection.Provider.TimeoutSeconds,
             MaxRetries = selection.Provider.RetryCount,

@@ -101,7 +101,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             document.Content,
             document.Type,
             document.DepartmentId,
-            QiaKonSeedData.GetDepartmentName(document.DepartmentId),
+            ResolveDepartmentName(document.DepartmentId),
             document.AccessLevel,
             document.IndexStatus,
             document.Version,
@@ -460,7 +460,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             document.Title,
             document.Type,
             document.DepartmentId,
-            QiaKonSeedData.GetDepartmentName(document.DepartmentId),
+            ResolveDepartmentName(document.DepartmentId),
             document.AccessLevel,
             document.IndexStatus,
             document.Version,
@@ -477,7 +477,7 @@ internal sealed class PostgresDocumentService : IDocumentService
             document.Content,
             document.Type,
             document.DepartmentId,
-            QiaKonSeedData.GetDepartmentName(document.DepartmentId),
+            ResolveDepartmentName(document.DepartmentId),
             document.AccessLevel,
             document.IndexStatus,
             document.Version,
@@ -560,4 +560,10 @@ internal sealed class PostgresDocumentService : IDocumentService
 
         return JsonNode.Parse(json) as JsonObject;
     }
+
+    private string ResolveDepartmentName(Guid departmentId)
+        => _dbContext.Departments.AsNoTracking()
+            .Where(x => x.Id == departmentId)
+            .Select(x => x.Name)
+            .FirstOrDefault() ?? QiaKonSeedData.GetDepartmentName(departmentId);
 }

@@ -14,6 +14,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\QiaKon.Llm\QiaKon.Llm.csproj" />
+        <ProjectReference Include="..\..\src\QiaKon.Llm.Providers\QiaKon.Llm.Providers.csproj" />
     </ItemGroup>
 
 </Project>

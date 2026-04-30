@@ -76,6 +76,29 @@ public abstract class HttpLlmClientBase : ILlmClient
             ?? throw new LlmException("Failed to deserialize response");
     }
 
+    protected string BuildVersionedRelativeUrl(string versionSegment, string relativePath)
+    {
+        var normalizedVersion = versionSegment.Trim('/');
+        var normalizedRelativePath = relativePath.TrimStart('/');
+
+        if (string.IsNullOrWhiteSpace(normalizedVersion))
+        {
+            return normalizedRelativePath;
+        }
+
+        var basePath = HttpClient.BaseAddress?.AbsolutePath
+            ?? new Uri(Options.BaseUrl, UriKind.Absolute).AbsolutePath;
+        var trimmedBasePath = basePath.TrimEnd('/');
+
+        if (trimmedBasePath.EndsWith('/' + normalizedVersion, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmedBasePath, normalizedVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            return normalizedRelativePath;
+        }
+
+        return $"{normalizedVersion}/{normalizedRelativePath}";
+    }
+
     protected async IAsyncEnumerable<ChatCompletionChunk> StreamRequestAsync(
         HttpMethod method,
         string url,

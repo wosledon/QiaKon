@@ -9,6 +9,8 @@ namespace QiaKon.Llm.Providers;
 /// </summary>
 public sealed class AnthropicClient : HttpLlmClientBase
 {
+    private const string MessagesPath = "messages";
+
     private static readonly JsonSerializerOptions AnthropicJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -50,7 +52,7 @@ public sealed class AnthropicClient : HttpLlmClientBase
 
         var response = await SendRequestAsync<AnthropicMessageResponse>(
             HttpMethod.Post,
-            "v1/messages",
+            BuildVersionedRelativeUrl("v1", MessagesPath),
             apiRequest,
             cancellationToken);
 
@@ -78,7 +80,7 @@ public sealed class AnthropicClient : HttpLlmClientBase
 
         await foreach (var chunk in StreamRequestAsync(
             HttpMethod.Post,
-            "v1/messages",
+            BuildVersionedRelativeUrl("v1", MessagesPath),
             apiRequest,
             cancellationToken))
         {

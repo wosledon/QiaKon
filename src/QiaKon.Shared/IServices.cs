@@ -238,6 +238,11 @@ public interface IRagService
     /// 删除对话
     /// </summary>
     bool DeleteConversation(Guid conversationId);
+
+    /// <summary>
+    /// 更新对话标题
+    /// </summary>
+    ConversationDetailDto? UpdateConversationTitle(Guid conversationId, string title);
 }
 
 /// <summary>

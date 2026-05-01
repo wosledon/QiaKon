@@ -79,10 +79,10 @@ internal sealed class DocumentIndexingRuntime
             var existingChunks = await _dbContext.DocumentChunks.Where(c => c.DocumentId == document.Id).ToListAsync(cancellationToken);
             _dbContext.DocumentChunks.RemoveRange(existingChunks);
             await DeleteVectorRecordsAsync(existingChunkIds, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         document.IndexProgress = 15;
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         var extraction = await ExtractContentAsync(document, cancellationToken);
         document.Content = extraction.Content;

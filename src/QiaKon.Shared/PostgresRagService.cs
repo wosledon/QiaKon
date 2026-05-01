@@ -408,14 +408,19 @@ internal sealed class PostgresRagService : IRagService
 
     private static string BuildSystemPrompt(bool enableThinking)
         => enableThinking
-            ? "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。你可以先使用 <think>...</think> 标签输出思考过程，但最终给用户的正式答案必须写在标签之外。"
-            : "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。不要输出任何 <think> 标签、思考过程、推理链或内部分析，只输出最终回答。";
+            ? "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。你可以先使用 꽁...ground 标签输出思考过程，但最终给用户的正式答案必须写在标签之外。"
+            : "你是 QiaKon 知识库问答助手。请严格基于给定的知识库片段回答，不要编造未检索到的事实；如果证据不足，请明确说明。不要输出任何 꽁 标签、思考过程、推理链或内部分析，只输出最终回答。";
 
     private static string BuildRagPrompt(string query, IReadOnlyList<RetrieveResultItemDto> results, bool enableThinking)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("以下是从知识库检索到的相关片段，请基于它们回答用户问题。");
-        sb.AppendLine("如果片段不足以支持结论，请明确说明“知识库中暂无足够依据”。");
+        sb.AppendLine("请基于以下知识库片段回答用户问题。");
+        sb.AppendLine();
+        sb.AppendLine("【重要规则】");
+        sb.AppendLine("1. 必须先判断：下面的片段是否与用户问题直接相关？");
+        sb.AppendLine("2. 如果不相关（主题完全不同），请明确回复：\"当前知识库中没有与问题直接相关的内容，建议上传相关文档后再试。\"不要基于无关片段编造答案。");
+        sb.AppendLine("3. 如果部分相关，可以回答，但必须明确说明哪些信息来自知识库，哪些是你的推断。");
+        sb.AppendLine("4. 绝对不要编造任何片段中没有提到的事实、数据或结论。");
         sb.AppendLine();
 
         for (var i = 0; i < results.Count; i++)
@@ -430,11 +435,12 @@ internal sealed class PostgresRagService : IRagService
         sb.AppendLine($"用户问题：{query}");
         if (enableThinking)
         {
-            sb.AppendLine("请先在 <think>...</think> 中输出你的分析过程，再在标签外给出结构化、准确、可追溯的中文最终答案，并优先引用上面的来源信息。");
+            sb.AppendLine("请先在 꽁...ground 中简要分析：①这些片段是否与问题相关？②如果相关，哪些部分可以支撑回答？③如果无关，应该如何回复？");
+            sb.AppendLine("然后在标签外给出最终答案。如果片段不相关，直接说明知识库中没有相关内容，不要强行回答。");
         }
         else
         {
-            sb.AppendLine("请直接输出结构化、准确、可追溯的中文回答，并优先引用上面的来源信息。不要输出任何 <think> 标签或思考过程。");
+            sb.AppendLine("如果片段与问题不相关，请直接说明知识库中没有相关内容。如果相关，请基于片段给出准确回答，并引用来源编号（如[1]、[2]）。");
         }
 
         return sb.ToString();
@@ -463,7 +469,7 @@ internal sealed class PostgresRagService : IRagService
 
         while (cursor < text.Length)
         {
-            var openIndex = text.IndexOf("<think>", cursor, StringComparison.OrdinalIgnoreCase);
+            var openIndex = text.IndexOf("꽁", cursor, StringComparison.OrdinalIgnoreCase);
             if (openIndex < 0)
             {
                 visible.Append(text[cursor..]);
@@ -472,7 +478,7 @@ internal sealed class PostgresRagService : IRagService
 
             visible.Append(text[cursor..openIndex]);
 
-            var closeIndex = text.IndexOf("</think>", openIndex + 7, StringComparison.OrdinalIgnoreCase);
+            var closeIndex = text.IndexOf("地", openIndex + 7, StringComparison.OrdinalIgnoreCase);
             if (closeIndex < 0)
             {
                 break;
@@ -492,7 +498,7 @@ internal sealed class PostgresRagService : IRagService
             return string.Empty;
         }
 
-        var partialTags = new[] { "<think>", "</think>" };
+        var partialTags = new[] { "꽁", "地" };
         foreach (var tag in partialTags)
         {
             for (var length = tag.Length - 1; length > 0; length--)

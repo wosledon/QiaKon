@@ -207,10 +207,13 @@ function buildHighlightCandidates(source: Source | null) {
   }
 
   const uniqueCandidates = new Set<string>()
+  const MIN_HIGHLIGHT_LENGTH = 24
 
   for (const raw of [source.text, source.snippet]) {
     for (const candidate of expandHighlightCandidates(raw)) {
-      uniqueCandidates.add(candidate)
+      if (candidate.length >= MIN_HIGHLIGHT_LENGTH) {
+        uniqueCandidates.add(candidate)
+      }
     }
   }
 
@@ -268,8 +271,53 @@ function clearSourceHighlights(container: HTMLElement) {
 }
 
 function highlightSourceInContainer(container: HTMLElement, candidates: string[]) {
+  // 优先尝试精确匹配（区分大小写，保留空白字符）
+  for (const candidate of candidates) {
+    const marks = highlightExactMatch(container, candidate)
+    if (marks.length > 0) {
+      return marks
+    }
+  }
+
+  // 如果精确匹配失败，再尝试模糊匹配
   for (const candidate of candidates) {
     const marks = highlightSingleCandidate(container, candidate)
+    if (marks.length > 0) {
+      return marks
+    }
+  }
+
+  return [] as HTMLElement[]
+}
+
+function highlightExactMatch(container: HTMLElement, candidate: string) {
+  const textNodes = collectTextNodes(container)
+  if (textNodes.length === 0) {
+    return [] as HTMLElement[]
+  }
+
+  // 构建聚合文本模型
+  const aggregateModel = buildAggregateTextModel(textNodes)
+  
+  // 尝试精确匹配（不忽略空白字符）
+  const exactIndex = aggregateModel.text.indexOf(candidate)
+  if (exactIndex >= 0) {
+    const matchEnd = exactIndex + candidate.length - 1
+    const marks: HTMLElement[] = []
+
+    for (const segment of aggregateModel.segments) {
+      const matchStart = Math.max(segment.start, exactIndex)
+      const matchEndSegment = Math.min(segment.end, exactIndex + candidate.length)
+      if (matchStart >= matchEndSegment) {
+        continue
+      }
+
+      const mark = wrapTextNodeRange(segment.node, matchStart - segment.start, matchEndSegment - segment.start)
+      if (mark) {
+        marks.push(mark)
+      }
+    }
+
     if (marks.length > 0) {
       return marks
     }
